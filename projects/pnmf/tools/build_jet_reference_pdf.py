@@ -1,15 +1,16 @@
-"""Build the PNMF frozen jet-reference validation report PDF."""
+"""Build the measured ANP v6.3 jet release-holdout report PDF."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from textwrap import wrap
 
+import pandas as pd
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import Image, Paragraph, Table, TableStyle
 from reportlab.pdfgen import canvas
 
@@ -17,6 +18,7 @@ from reportlab.pdfgen import canvas
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = PROJECT_ROOT / "output" / "pdf" / "PNMF_Jet_Reference_Validation_Report.pdf"
 ASSETS = PROJECT_ROOT / "docs" / "jet_reference_assets"
+EVIDENCE = PROJECT_ROOT / "outputs" / "model_validation" / "jet_reference_v63"
 
 PAGE_W, PAGE_H = A4
 MARGIN_X = 18 * mm
@@ -27,7 +29,6 @@ NAVY = colors.HexColor("#17324D")
 BLUE = colors.HexColor("#137CBD")
 LIGHT_BLUE = colors.HexColor("#EAF4FA")
 PALE = colors.HexColor("#F5F7F9")
-ORANGE = colors.HexColor("#D55E00")
 GREEN = colors.HexColor("#27815C")
 TEXT = colors.HexColor("#24313C")
 MUTED = colors.HexColor("#667582")
@@ -35,27 +36,26 @@ RULE = colors.HexColor("#D4DDE4")
 WHITE = colors.white
 
 BODY = ParagraphStyle(
-    "Body",
-    fontName="Helvetica",
-    fontSize=9.2,
-    leading=13.1,
-    textColor=TEXT,
+    "Body", fontName="Helvetica", fontSize=9.2, leading=13.1, textColor=TEXT
 )
 SMALL = ParagraphStyle(
-    "Small",
-    parent=BODY,
-    fontSize=7.7,
-    leading=10.4,
+    "Small", parent=BODY, fontSize=7.7, leading=10.4
 )
 TABLE_TEXT = ParagraphStyle(
-    "Table",
-    parent=BODY,
-    fontSize=7.4,
-    leading=9.2,
+    "Table", parent=BODY, fontSize=7.3, leading=9.1
 )
 CENTER = ParagraphStyle(
-    "Center",
+    "Center", parent=TABLE_TEXT, alignment=TA_CENTER
+)
+HEADER_TABLE_TEXT = ParagraphStyle(
+    "HeaderTable",
     parent=TABLE_TEXT,
+    fontName="Helvetica-Bold",
+    textColor=WHITE,
+)
+HEADER_CENTER = ParagraphStyle(
+    "HeaderCenter",
+    parent=HEADER_TABLE_TEXT,
     alignment=TA_CENTER,
 )
 
@@ -76,15 +76,21 @@ class Report:
         self.canvas.setFont("Helvetica-Bold", 8.2)
         self.canvas.drawString(MARGIN_X, PAGE_H - 8.5 * mm, "PNMF  |  MODEL VALIDATION")
         self.canvas.setFont("Helvetica", 7.5)
-        self.canvas.drawRightString(PAGE_W - MARGIN_X, PAGE_H - 8.5 * mm, section.upper())
+        self.canvas.drawRightString(
+            PAGE_W - MARGIN_X, PAGE_H - 8.5 * mm, section.upper()
+        )
         self.canvas.setFillColor(NAVY)
         self.canvas.setFont("Helvetica-Bold", 19)
         self.canvas.drawString(MARGIN_X, TOP - 9 * mm, title)
         self.canvas.setStrokeColor(BLUE)
         self.canvas.setLineWidth(2.2)
-        self.canvas.line(MARGIN_X, TOP - 13 * mm, MARGIN_X + 24 * mm, TOP - 13 * mm)
+        self.canvas.line(
+            MARGIN_X, TOP - 13 * mm, MARGIN_X + 24 * mm, TOP - 13 * mm
+        )
 
-    def footer(self, note: str = "Conceptual screening evidence - not certification evidence") -> None:
+    def footer(
+        self, note: str = "Conceptual screening evidence - not certification evidence"
+    ) -> None:
         self.canvas.setStrokeColor(RULE)
         self.canvas.setLineWidth(0.5)
         self.canvas.line(MARGIN_X, BOTTOM, PAGE_W - MARGIN_X, BOTTOM)
@@ -110,37 +116,50 @@ class Report:
         x: float = MARGIN_X,
     ) -> float:
         width = width or PAGE_W - 2 * MARGIN_X
-        p = Paragraph(text, style)
-        _, height = p.wrap(width, PAGE_H)
-        p.drawOn(self.canvas, x, y - height)
+        paragraph = Paragraph(text, style)
+        _, height = paragraph.wrap(width, PAGE_H)
+        paragraph.drawOn(self.canvas, x, y - height)
         return y - height - 3 * mm
 
     def bullet(self, text: str, y: float, width: float | None = None) -> float:
-        return self.paragraph(f"<bullet>&bull;</bullet>{text}", y, width)
+        return self.paragraph(f"-&nbsp;&nbsp;{text}", y, width)
 
-    def image(self, name: str, x: float, y_top: float, width: float, height: float) -> None:
-        img = Image(str(ASSETS / name), width=width, height=height, kind="proportional")
-        img.drawOn(self.canvas, x, y_top - height)
+    def image(
+        self, name: str, x: float, y_top: float, width: float, height: float
+    ) -> None:
+        image = Image(
+            str(ASSETS / name), width=width, height=height, kind="proportional"
+        )
+        image.drawOn(self.canvas, x, y_top - height)
 
     def table(
         self,
         data: list[list[object]],
         y_top: float,
         widths: list[float],
-        row_heights: list[float] | None = None,
         x: float = MARGIN_X,
-        font_size: float = 7.5,
+        font_size: float = 7.4,
     ) -> float:
-        normalized = [
-            [
-                value
-                if isinstance(value, Paragraph)
-                else Paragraph(str(value), TABLE_TEXT if col == 0 else CENTER)
-                for col, value in enumerate(row)
-            ]
-            for row in data
-        ]
-        table = Table(normalized, colWidths=widths, rowHeights=row_heights, repeatRows=1)
+        normalized = []
+        for row_index, row in enumerate(data):
+            normalized_row = []
+            for col, value in enumerate(row):
+                if row_index == 0:
+                    header_value = (
+                        value.getPlainText()
+                        if isinstance(value, Paragraph)
+                        else str(value)
+                    )
+                    style = HEADER_TABLE_TEXT if col == 0 else HEADER_CENTER
+                    normalized_row.append(Paragraph(header_value, style))
+                elif isinstance(value, Paragraph):
+                    normalized_row.append(value)
+                else:
+                    normalized_row.append(
+                        Paragraph(str(value), TABLE_TEXT if col == 0 else CENTER)
+                    )
+            normalized.append(normalized_row)
+        table = Table(normalized, colWidths=widths, repeatRows=1)
         table.setStyle(
             TableStyle(
                 [
@@ -162,252 +181,354 @@ class Report:
         table.drawOn(self.canvas, x, y_top - height)
         return y_top - height - 4 * mm
 
-    def kpi(self, x: float, y: float, w: float, value: str, label: str, color=BLUE) -> None:
+    def kpi(
+        self, x: float, y: float, width: float, value: str, label: str, color=BLUE
+    ) -> None:
         self.canvas.setFillColor(LIGHT_BLUE)
-        self.canvas.roundRect(x, y, w, 25 * mm, 3 * mm, fill=1, stroke=0)
+        self.canvas.roundRect(x, y, width, 25 * mm, 3 * mm, fill=1, stroke=0)
         self.canvas.setFillColor(color)
         self.canvas.setFont("Helvetica-Bold", 20)
-        self.canvas.drawCentredString(x + w / 2, y + 13.5 * mm, value)
+        self.canvas.drawCentredString(x + width / 2, y + 13.5 * mm, value)
         self.canvas.setFillColor(TEXT)
         self.canvas.setFont("Helvetica", 7.8)
-        for idx, line in enumerate(wrap(label, width=24)):
-            self.canvas.drawCentredString(x + w / 2, y + (7 - 3.2 * idx) * mm, line)
+        for index, line in enumerate(wrap(label, width=24)):
+            self.canvas.drawCentredString(
+                x + width / 2, y + (7 - 3.2 * index) * mm, line
+            )
 
     def finish(self) -> None:
         self.canvas.save()
 
 
+def _metric_rows(summary: pd.DataFrame, scope: str) -> pd.DataFrame:
+    return summary[summary["scope"] == scope].copy()
+
+
+def _fmt(value: float) -> str:
+    return f"{float(value):.3f}"
+
+
 def build() -> Path:
-    """Build the bounded six-page handoff edition."""
-    r = Report(OUTPUT)
+    """Build a six-page report directly from the saved v6.3 evidence."""
+    summary = pd.read_csv(EVIDENCE / "summary.csv")
+    references = pd.read_csv(EVIDENCE / "reference_metadata.csv")
+    manifest = json.loads((EVIDENCE / "run_manifest.json").read_text("utf-8"))
+    counts = manifest["counts"]
+    conclusion = manifest["official_conclusion"]
+    urls = manifest["official_source_urls"]
+    overall = _metric_rows(summary, "overall")
+    category = _metric_rows(summary, "category_overall")
+
+    def metric(model: str, aggregation: str, field: str) -> float:
+        row = overall[
+            overall["model"].eq(model) & overall["aggregation"].eq(aggregation)
+        ]
+        return float(row.iloc[0][field])
+
+    report = Report(OUTPUT)
     formula_style = ParagraphStyle(
-        "ConciseFormula",
+        "Formula",
         parent=BODY,
         fontName="Courier-Bold",
-        fontSize=9.2,
-        leading=13,
+        fontSize=8.5,
+        leading=12,
         backColor=LIGHT_BLUE,
-        borderPadding=8,
+        borderPadding=7,
     )
 
-    r.new_page("Frozen Jet-Reference Validation", "Executive summary")
+    report.new_page("ANP v6.3 Jet Release Holdout", "Executive summary")
     y = TOP - 24 * mm
-    y = r.paragraph(
-        "<b>A transparent sanity check of PNMF's production Extra Trees and Random "
-        "Forest models.</b> Three conventional jet references were frozen before "
-        "errors were calculated, with every connected aircraft identity removed "
-        "from training.",
+    y = report.paragraph(
+        "<b>A source-separated check of PNMF's production Extra Trees and "
+        "Random Forest models.</b> Models train only on legacy v2.3 Jet curves "
+        "after a predeclared family purge and are scored on three frozen v6.3 "
+        "reference curves.",
         y,
-        style=ParagraphStyle("ConciseLead", parent=BODY, fontSize=12, leading=17),
+        style=ParagraphStyle("Lead", parent=BODY, fontSize=11.5, leading=16.2),
     )
     gap = 4 * mm
     box_w = (PAGE_W - 2 * MARGIN_X - 3 * gap) / 4
     box_y = y - 31 * mm
-    r.kpi(MARGIN_X, box_y, box_w, "94", "complete-task jet curves")
-    r.kpi(MARGIN_X + box_w + gap, box_y, box_w, "91 / 3", "train / test curves")
-    r.kpi(MARGIN_X + 2 * (box_w + gap), box_y, box_w, "4.659", "RF pooled RMSE, dB", GREEN)
-    r.kpi(MARGIN_X + 3 * (box_w + gap), box_y, box_w, "64.423%", "RF cells within +/-5 dB", GREEN)
-    y = r.heading("Plain-language result", box_y - 10 * mm)
+    report.kpi(MARGIN_X, box_y, box_w, "76 / 3", "legacy train / v6.3 test curves")
+    report.kpi(MARGIN_X + box_w + gap, box_y, box_w, "1,160", "scored power-distance cells")
+    report.kpi(
+        MARGIN_X + 2 * (box_w + gap),
+        box_y,
+        box_w,
+        _fmt(metric("et", "cell_pooled", "rmse_dB")),
+        "ET pooled RMSE, dB",
+        GREEN,
+    )
+    report.kpi(
+        MARGIN_X + 3 * (box_w + gap),
+        box_y,
+        box_w,
+        _fmt(metric("rf", "cell_pooled", "rmse_dB")),
+        "RF pooled RMSE, dB",
+        GREEN,
+    )
+    y = report.heading("Official-source conclusion", box_y - 10 * mm)
+    y = report.paragraph(f"<b>{conclusion}</b>", y)
+    y = report.paragraph(
+        "This is a provenance and chronology judgment, not a universal "
+        "curve-accuracy claim. Both model scores are close in this small holdout; "
+        "the category tables are more informative than a winner label.",
+        y,
+    )
+    y = report.heading("Evidence boundary", y - 2 * mm)
     for text in [
-        "<b>RF:</b> 4.659 dB pooled RMSE and 64.423% of cells within +/-5 dB.",
-        "<b>ET:</b> 5.125 dB pooled RMSE and 57.885% of cells within +/-5 dB.",
-        "Category-balanced RMSE is 4.633 dB for RF and 4.840 dB for ET.",
-        "Performance differs materially by category; the four-engine ET reference "
-        "is the clearest weakness.",
-        "The 1,040 cells are correlated observations inside only <b>three "
-        "independent curves</b>. Threshold agreement is not general accuracy.",
+        "Only three independent curves are tested; the 1,160 cells are correlated.",
+        "Tri- and quad-engine categories each have one v6.3 candidate only.",
+        "Use for conceptual screening and model scrutiny, never certification.",
     ]:
-        y = r.bullet(text, y)
-    y = r.heading("Decision boundary", y - 2 * mm)
-    r.paragraph(
-        "Use this evidence for conceptual screening and model scrutiny. It is not "
-        "fleet-wide accuracy evidence and not certification evidence.",
-        y,
-    )
-    r.footer()
+        y = report.bullet(text, y)
+    report.footer()
 
-    r.new_page("Data, Selection, and Split", "Evidence design")
+    report.new_page("Sources, Selection, and Split", "Evidence design")
     y = TOP - 23 * mm
-    y = r.paragraph(
-        "The canonical datastore combines the EASA ANP legacy v2.3 corpus with "
-        "the v6.3 supplement. The complete-task jet population contains 94 curves "
-        "in 93 connected aircraft-identity groups.",
+    y = report.paragraph(
+        "EASA states that it collects, verifies and makes ANP information "
+        "available under Regulation (EU) No 598/2014. EASA separately labels "
+        "v2.3 as legacy data assembled before that mandate.",
         y,
     )
-    r.image("jet_reference_architecture.png", MARGIN_X, y, PAGE_W - 2 * MARGIN_X, 43 * mm)
+    y = report.paragraph(
+        f"<link href='{urls['easa_anp_data']}' color='#137CBD'>"
+        "EASA Aircraft Noise and Performance (ANP)</link>  |  "
+        f"<link href='{urls['easa_anp_legacy_data']}' color='#137CBD'>"
+        "EASA ANP legacy data</link>  |  "
+        f"<link href='{urls['eu_regulation_598_2014']}' color='#137CBD'>"
+        "Regulation (EU) 598/2014</link>",
+        y,
+        style=SMALL,
+    )
+    report.image(
+        "jet_reference_architecture.png",
+        MARGIN_X,
+        y,
+        PAGE_W - 2 * MARGIN_X,
+        43 * mm,
+    )
     y -= 50 * mm
-    selection = [
-        ["Category", "Frozen NPD", "Reference aircraft", "ACFT_ID", "Distance"],
-        ["2 engines", "BR715", "Boeing 717-200", "717200", "0.036467"],
-        ["3 engines", "3JT8E5", "Boeing 727-200", "727EM2", "0.023327"],
-        ["4 engines", "PW4056", "Boeing 747-400", "747400", "0.352528"],
-    ]
-    y = r.table(selection, y, [29 * mm, 27 * mm, 49 * mm, 32 * mm, 39 * mm])
-    y = r.paragraph(
-        "<b>Descriptor-only rule:</b> distance = sqrt(sum_j (((x_j - median_j) / "
-        "IQR_j)^2)), using log10(MTOW), log10(total static thrust), and noise "
-        "chapter. Zero-IQR terms contribute zero; NPD_ID is the tie-break. Noise "
-        "targets and model errors never select a reference.",
+    selection = [["Eng.", "Frozen NPD / ACFT_ID", "Description", "Distance"]]
+    for row in references.sort_values("engine_count").itertuples(index=False):
+        selection.append(
+            [
+                str(int(row.engine_count)),
+                f"{row.npd_id} / {row.acft_id}",
+                row.description,
+                f"{row.robust_distance:.6f}",
+            ]
+        )
+    y = report.table(
+        selection, y, [17 * mm, 45 * mm, 82 * mm, 32 * mm]
+    )
+    y = report.paragraph(
+        "<b>Descriptor-only rule:</b> per-category IQR-scaled Euclidean "
+        "distance over log10(MTOW), log10(total static thrust), and noise "
+        "chapter. Zero-IQR terms contribute zero; lexical NPD_ID breaks ties. "
+        "Targets and errors never select a reference.",
         y,
         style=SMALL,
     )
     split = [
         ["Evidence unit", "Train", "Test", "Interpretation"],
-        ["Jet curves", "91", "3", "Strict identity-group separation"],
-        ["Approach rows / task", "270", "10", "Held-out power rows"],
-        ["Departure rows / task", "370", "16", "Held-out power rows"],
-        ["All test cells", "-", "1,040", "104 power rows x 10 distances"],
+        ["Jet curves", "76", "3", "v2.3 only / v6.3 only"],
+        ["Approach rows per metric", "216", "12", "Power rows"],
+        ["Departure rows per metric", "297", "17", "Power rows"],
+        ["All test cells", "-", "1,160", "116 rows x 10 distances"],
     ]
-    y = r.table(split, y, [46 * mm, 22 * mm, 22 * mm, 86 * mm])
-    r.paragraph(
-        "Only singleton identity groups are selectable. The mapping is frozen and "
-        "the implementation fails if datastore drift changes it.",
-        y,
-        style=SMALL,
-    )
-    r.footer()
+    report.table(split, y, [48 * mm, 22 * mm, 22 * mm, 84 * mm])
+    report.footer()
 
-    r.new_page("Model Inputs and Learning Routes", "Method")
+    report.new_page("Separation and Learning Method", "Method")
     y = TOP - 23 * mm
-    y = r.paragraph(
-        "Each requested power row becomes a 12-feature vector. The target is the "
-        "measured NPD level vector at ten standard slant distances from 200 to "
-        "25,000 ft.",
+    y = report.heading("Predeclared family guard", y)
+    y = report.paragraph(
+        "Before fitting, seven legacy NPDs are excluded: <b>CF680E, TRENT7, "
+        "JT9DBD, JT9DFL, JT9D7Q, PW4056, and GENX67</b>. They conservatively "
+        "guard the A330 and 747 families represented in the v6.3 holdout. "
+        "Falcon 20 is not automatically purged; no broad name heuristic is used.",
         y,
     )
-    features = [
-        ["#", "Feature", "Purpose"],
-        ["1-3", "Engine type one-hot", "Jet / turboprop / piston indicators"],
-        ["4", "Engine count", "Installed engine count"],
-        ["5-6", "log10(MTOW), log10(MLW)", "Takeoff and landing weight scales"],
-        ["7", "MLW / MTOW", "Relative landing-weight descriptor"],
-        ["8-9", "log10(per-engine and total thrust)", "Per-engine and installed thrust"],
-        ["10", "Noise chapter", "Certification-era descriptor"],
-        ["11", "log10(converted row power in lbf)", "Requested operating power"],
-        ["12", "Throttle", "Normalized operating setting"],
+    purge_table = [
+        ["Stage", "Twin", "Tri", "Quad", "Total"],
+        ["Legacy complete-task Jet pool", "59", "9", "15", "83"],
+        ["Predeclared exclusions", "2", "0", "5", "7"],
+        ["Training after purge", "57", "9", "10", "76"],
+        ["Frozen v6.3 test", "1", "1", "1", "3"],
     ]
-    y = r.table(features, y, [15 * mm, 76 * mm, 85 * mm])
-    y = r.heading("Frozen production learners", y)
+    y = report.table(
+        purge_table, y, [72 * mm, 26 * mm, 26 * mm, 26 * mm, 26 * mm]
+    )
+    y = report.heading("Models and tasks", y - 2 * mm)
     models = [
-        ["Route", "Configuration", "Plain-language behavior"],
-        ["Extra Trees (ET)", "500 trees; depth 24; max features 0.5; leaf 1", "Highly randomized tree ensemble"],
-        ["Random Forest (RF)", "200 bootstrap trees; leaf 2", "Bootstrap tree ensemble"],
+        ["Route", "Configuration", "Coverage"],
+        ["Extra Trees", "500 trees; depth 24; features 0.5; leaf 1", "8 tasks"],
+        ["Random Forest", "200 bootstrap trees; leaf 2", "8 tasks"],
     ]
-    y = r.table(models, y, [38 * mm, 67 * mm, 71 * mm])
-    y = r.heading("Scoring formulas", y)
-    y = r.paragraph(
-        "<font name='Courier'>error = prediction - truth</font><br/>"
-        "<font name='Courier'>RMSE = sqrt(mean(error^2))</font><br/>"
-        "<font name='Courier'>MAE = mean(abs(error))</font><br/>"
-        "<font name='Courier'>within +/-5 = 100 x mean(abs(error) &lt;= 5)</font>",
+    y = report.table(models, y, [42 * mm, 88 * mm, 46 * mm])
+    y = report.paragraph(
+        "Each task predicts ten standard NPD distances. Inputs retain the frozen "
+        "12-feature learned surface and mixed-power-unit correction. Predictions "
+        "retain the non-increasing distance projection.",
+        y,
+    )
+    y = report.heading("Scoring formulas", y - 2 * mm)
+    y = report.paragraph(
+        "error = prediction - truth<br/>"
+        "RMSE = sqrt(mean(error^2)); MAE = mean(abs(error))<br/>"
+        "bias = mean(error); p90 = percentile(abs(error), 90)<br/>"
+        "within +/-k dB = 100 x mean(abs(error) &lt;= k)",
         y,
         style=formula_style,
     )
-    r.paragraph(
-        "Both learned routes use the normal non-increasing distance projection. "
-        "PhysicsNPDModel is separate and excluded: it supplies no features or "
-        "targets to ET/RF.",
+    report.paragraph(
+        "PhysicsNPDModel remains an independent SEL/LAmax component-source "
+        "workflow. It supplies neither features nor targets to ET/RF here.",
         y,
     )
-    r.footer()
+    report.footer()
 
-    r.new_page("Overall Measured Results", "ET and RF")
+    report.new_page("Overall Measured Results", "ET and RF")
     y = TOP - 23 * mm
-    overall = [
-        ["Model", "Aggregation", "RMSE", "MAE", "Bias", "P90 abs", "Within +/-5"],
-        ["ET", "Cell pooled", "5.125", "4.499", "-1.193", "7.366", "57.885%"],
-        ["ET", "Category balanced", "4.840", "4.147", "-1.265", "6.430", "63.278%"],
-        ["RF", "Cell pooled", "4.659", "4.304", "-0.992", "6.427", "64.423%"],
-        ["RF", "Category balanced", "4.633", "4.252", "-1.375", "6.575", "63.278%"],
+    table = [
+        ["Model", "Aggregation", "RMSE", "MAE", "Bias", "P90 abs", "+/-3", "+/-5"]
     ]
-    y = r.table(overall, y, [18 * mm, 45 * mm, 23 * mm, 21 * mm, 21 * mm, 25 * mm, 30 * mm])
-    r.image("jet_reference_metrics.png", MARGIN_X + 6 * mm, y, PAGE_W - 2 * MARGIN_X - 12 * mm, 98 * mm)
+    for model in ("et", "rf"):
+        for aggregation, label in (
+            ("cell_pooled", "Cell pooled"),
+            ("category_balanced", "Category balanced"),
+        ):
+            row = overall[
+                overall["model"].eq(model)
+                & overall["aggregation"].eq(aggregation)
+            ].iloc[0]
+            table.append(
+                [
+                    model.upper(),
+                    label,
+                    _fmt(row.rmse_dB),
+                    _fmt(row.mae_dB),
+                    f"{row.bias_dB:+.3f}",
+                    _fmt(row.p90_abs_error_dB),
+                    f"{row.pct_within_3_dB:.3f}%",
+                    f"{row.pct_within_5_dB:.3f}%",
+                ]
+            )
+    y = report.table(
+        table,
+        y,
+        [16 * mm, 42 * mm, 21 * mm, 20 * mm, 20 * mm, 23 * mm, 22 * mm, 22 * mm],
+    )
+    report.image(
+        "jet_reference_metrics.png",
+        MARGIN_X + 6 * mm,
+        y,
+        PAGE_W - 2 * MARGIN_X - 12 * mm,
+        98 * mm,
+    )
     y -= 106 * mm
-    r.paragraph(
-        "<b>Interpretation:</b> RF has the lower pooled RMSE. Balanced RMSE is "
-        "closer because every engine-count category contributes equally. RMSE "
-        "emphasizes large misses; MAE describes typical absolute cell error; bias "
-        "is prediction minus truth. The threshold percentages describe correlated "
-        "cells, not independent aircraft successes.",
+    report.paragraph(
+        "Cell-pooled metrics weight every cell equally. Category-balanced "
+        "metrics give twin, tri, and quad categories equal influence; balanced "
+        'RMSE is the square root of mean category MSE. "Within +/-3 dB" and '
+        '"within +/-5 dB" are threshold-agreement percentages over correlated '
+        "cells, not success probabilities or certification margins.",
         y,
         style=SMALL,
     )
-    r.footer()
+    report.footer()
 
-    r.new_page("Category and Curve Differences", "Error pattern")
+    report.new_page("Reference-Level Error Patterns", "Diagnostics")
     y = TOP - 23 * mm
-    category = [
-        ["Model", "Eng.", "RMSE", "MAE", "Bias", "P90", "+/-5"],
-        ["ET", "2", "4.611", "4.269", "+4.248", "6.610", "63.000%"],
-        ["ET", "3", "2.229", "1.863", "-1.733", "3.228", "98.333%"],
-        ["ET", "4", "6.636", "6.310", "-6.310", "9.452", "28.500%"],
-        ["RF", "2", "4.534", "4.294", "+4.288", "6.255", "64.500%"],
-        ["RF", "3", "4.459", "3.914", "-3.867", "6.334", "55.833%"],
-        ["RF", "4", "4.893", "4.547", "-4.547", "7.136", "69.500%"],
-    ]
-    y = r.table(category, y, [20 * mm, 18 * mm, 23 * mm, 22 * mm, 22 * mm, 22 * mm, 29 * mm])
-    y = r.paragraph(
-        "The four-engine reference is the main ET weakness: -6.310 dB mean bias "
-        "and 28.500% of cells within +/-5 dB. RF also underpredicts it, but less.",
+    table = [["Model", "Eng.", "RMSE", "MAE", "Bias", "P90", "+/-3", "+/-5"]]
+    pooled_category = category[category["aggregation"].eq("cell_pooled")]
+    for row in pooled_category.sort_values(
+        ["model", "engine_count_category"]
+    ).itertuples(index=False):
+        table.append(
+            [
+                row.model.upper(),
+                str(row.engine_count_category),
+                _fmt(row.rmse_dB),
+                _fmt(row.mae_dB),
+                f"{row.bias_dB:+.3f}",
+                _fmt(row.p90_abs_error_dB),
+                f"{row.pct_within_3_dB:.2f}%",
+                f"{row.pct_within_5_dB:.2f}%",
+            ]
+        )
+    y = report.table(
+        table,
         y,
-        style=SMALL,
+        [17 * mm, 17 * mm, 22 * mm, 21 * mm, 22 * mm, 22 * mm, 27 * mm, 28 * mm],
     )
-    r.image("jet_reference_residual_heatmap.png", MARGIN_X + 20 * mm, y, PAGE_W - 2 * MARGIN_X - 40 * mm, 62 * mm)
-    y -= 67 * mm
-    r.image("jet_reference_npd_comparison.png", MARGIN_X, y, PAGE_W - 2 * MARGIN_X, 52 * mm)
-    y -= 57 * mm
-    r.paragraph(
+    report.image(
+        "jet_reference_residual_heatmap.png",
+        MARGIN_X + 20 * mm,
+        y,
+        PAGE_W - 2 * MARGIN_X - 40 * mm,
+        60 * mm,
+    )
+    y -= 65 * mm
+    report.image(
+        "jet_reference_npd_comparison.png",
+        MARGIN_X,
+        y,
+        PAGE_W - 2 * MARGIN_X,
+        50 * mm,
+    )
+    y -= 55 * mm
+    report.paragraph(
         "The lower chart is an illustrative maximum-power SEL departure slice. "
-        "All eight tasks, power rows, and ten distances remain in predictions.csv.",
+        "The four-engine reference shows a positive bias for both learners. "
+        "All eight tasks and every power row remain in predictions.csv.",
         y,
         style=SMALL,
     )
-    r.footer()
+    report.footer()
 
-    r.new_page("Validity Boundaries and Audit Trail", "Conclusion")
+    report.new_page("Validity Boundaries and Audit Trail", "Conclusion")
     y = TOP - 23 * mm
-    y = r.paragraph(
-        "<b>The result is a pre-frozen implementation sanity check on three "
-        "conventional jet curves with strict identity separation.</b>",
+    y = report.paragraph(
+        f"<b>{conclusion}</b>",
         y,
-        style=ParagraphStyle("BoundaryLead", parent=BODY, fontSize=11, leading=15.5),
+        style=ParagraphStyle(
+            "BoundaryLead", parent=BODY, fontSize=10.8, leading=15.2
+        ),
     )
-    y = r.heading("Limitations", y)
+    y = report.heading("Scientific limitations", y - 2 * mm)
     for text in [
-        "Three independent curves are too few for fleet-wide accuracy or certification.",
-        "The 1,040 cells are repeated power-distance observations and are correlated.",
-        "Selection represents only weight, total thrust, and noise chapter.",
-        "The references do not establish performance for unseen families, unusual "
-        "geometry, or unconventional propulsion.",
-        "Category differences matter; pooled values can hide four-engine weakness.",
+        "Three independent curves are too few for fleet-wide or certification claims.",
+        "The 1,160 cells are repeated observations within those curves and are correlated.",
+        "Tri- and quad-engine categories each have one v6.3 candidate; neither is a general representative.",
+        "Selection uses only weight, installed thrust, and noise chapter.",
+        "The family purge reduces obvious A330/747 leakage but cannot prove absence of all engineering similarity.",
+        "Results do not establish performance for unconventional aircraft or propulsion.",
     ]:
-        y = r.bullet(text, y)
-    y = r.heading("Physics remains separate", y - 2 * mm)
-    y = r.paragraph(
-        "PhysicsNPDModel is an independent component-source cross-check for SEL and "
-        "LAmax with explicit bypass-ratio/component assumptions and frozen "
-        "calibration. It is not trained or evaluated here and does not feed ET/RF.",
-        y,
-    )
-    y = r.heading("Reproducible evidence", y)
-    y = r.paragraph(
-        "Seed 20260724. Saved artifacts include selection_candidates.csv, "
-        "reference_metadata, split.csv, predictions.csv, fit_runs.csv, summary.csv "
-        "and summary.json, source_manifest.csv, and run_manifest.json under "
-        "<font name='Courier'>outputs/model_validation/jet_reference</font>.",
+        y = report.bullet(text, y)
+    y = report.heading("Reproducible evidence", y - 2 * mm)
+    y = report.paragraph(
+        f"Seed {manifest['config']['seed']}. Datastore SHA-256 "
+        f"<font name='Courier'>{manifest['inputs']['datastore_sha256']}</font>. "
+        "Candidate scores, reference metadata, exclusions, predictions, fit "
+        "records, summaries, source manifest, official URLs, and artifact hashes "
+        "are saved under "
+        "<font name='Courier'>outputs/model_validation/jet_reference_v63</font>.",
         y,
         style=SMALL,
     )
-    y = r.heading("Final interpretation", y)
-    r.paragraph(
-        "RF is stronger on the pooled headline in this frozen check, while balanced "
-        "results are closer. Treat the category table and residual patterns as the "
-        "main diagnostic evidence. Use the report for conceptual screening and "
-        "model scrutiny - never as a certification or broad fleet-performance claim.",
+    y = report.heading("Decision boundary", y - 2 * mm)
+    report.paragraph(
+        "Use this release holdout as a transparent diagnostic of legacy-trained "
+        "ET/RF behavior on the three frozen v6.3 references. It does not replace "
+        "broader grouped validation and must not be presented as universal "
+        "accuracy or certification evidence.",
         y,
     )
-    r.footer("PNMF frozen jet-reference validation | Saved measured results")
-    r.finish()
+    report.footer("PNMF v6.3 release holdout | Saved measured results")
+    report.finish()
     return OUTPUT
 
 

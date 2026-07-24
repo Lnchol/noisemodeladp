@@ -1,79 +1,94 @@
-# Frozen Jet-Reference Validation Report
+# ANP v6.3 Jet Release-Holdout Validation Report
 
-> Generated 2026-07-24T11:20:57.569548+00:00 from measured ANP truth. This is conceptual-screening evidence, not certification evidence.
+> Generated 2026-07-24T12:20:39.734044+00:00 from frozen EASA ANP reference data. This is conceptual-screening evidence, not certification evidence.
 
-## Plain-language result
+## Conclusion and evidence boundary
 
-Three ordinary jet references—one twin, one three-engine aircraft, and one four-engine aircraft—were frozen before model errors were calculated. Every aircraft identity connected to a reference curve was removed from training. Extra Trees (ET) and Random Forest (RF) then predicted the published NPD levels from aircraft descriptors and the requested power grid.
+v6.3 is preferable as newer EASA-collected/verified reference provenance, but no official source proves universal accuracy superiority.
 
-| model | aggregation | engine_count_category | rmse_dB | mae_dB | bias_dB | p90_abs_error_dB | pct_within_3_dB | pct_within_5_dB | n_cells |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| et | cell_pooled | all | 5.125 | 4.499 | -1.193 | 7.366 | 30.577 | 57.885 | 1040 |
-| et | curve_category_balanced | all | 4.840 | 4.147 | -1.265 | 6.430 | 37.944 | 63.278 | 1040 |
-| rf | cell_pooled | all | 4.659 | 4.304 | -0.992 | 6.427 | 23.173 | 64.423 | 1040 |
-| rf | curve_category_balanced | all | 4.633 | 4.252 | -1.375 | 6.575 | 25.028 | 63.278 | 1040 |
+This conclusion is about source provenance and release chronology, not a claim that every v6.3 curve is intrinsically more accurate than every legacy curve. EASA states that it collects, verifies and makes ANP data available under Regulation (EU) No 598/2014. EASA separately describes v2.3 as legacy data collected before that mandate.
 
-Only three independent curves are tested. The 1,040 cells are repeated power/distance observations within those curves and are correlated; they are not 1,040 independent aircraft tests.
+- [EASA Aircraft Noise and Performance (ANP)](https://www.easa.europa.eu/en/domains/environment/policy-support-and-research/aircraft-noise-and-performance-anp-data)
+- [EASA ANP legacy data](https://www.easa.europa.eu/en/domains/environment/policy-support-and-research/aircraft-noise-and-performance-anp-data/anp-legacy-data)
+- [Regulation (EU) No 598/2014](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32014R0598)
+
+## Protocol
+
+The primary training protocol uses only complete-task Jet curves from legacy v2.3. No v6.3 target row enters training. The frozen test contains three v6.3 references selected before errors by descriptor-only distance.
 
 ![Validation architecture](jet_reference_assets/jet_reference_architecture.png)
 
-## Database and frozen selection
-
-The canonical datastore combines the EASA ANP legacy v2.3 source with the v6.3 supplement. Among curves with all eight tasks, the jet subset contains 94 curves in 93 connected aircraft-identity groups. There are no one-engine jets; the categories are 2, 3 and 4 engines.
-
-Reference selection never uses a noise target or prediction error. For each engine-count category, the population median and IQR are computed over all complete-task jet curves for `[log10(MTOW_lb), log10(total_static_thrust_lb), noise_chapter]`. A selectable candidate must be a one-curve, one-ACFT_ID identity group. Its score is
+For each engine-count category, the candidate pool is restricted to `source_dataset=supplement_v6.3`, `engine_type=Jet`, and all eight metric/mode tasks. Medians and IQRs are calculated within that v6.3 category over `[log10(MTOW_lb), log10(total static thrust_lb), noise chapter]`:
 
 `distance = sqrt(sum_j (((x_j - median_j) / IQR_j)^2))`.
 
-A zero-IQR feature contributes zero; lowest distance wins and NPD_ID lexical order is the exact tie-break. The implementation derives the following frozen mapping and fails if future datastore drift changes it:
+A zero-IQR contribution is exactly zero. Lowest score wins; lexical `NPD_ID` is the deterministic tie-break. Noise targets, predictions and errors are not selection inputs.
 
-- 2 engines: NPD `BR715`, ACFT_ID `717200`, robust distance `0.036467`.
-- 3 engines: NPD `3JT8E5`, ACFT_ID `727EM2`, robust distance `0.023327`.
-- 4 engines: NPD `PW4056`, ACFT_ID `747400`, robust distance `0.352528`.
+- 2 engines: `A330-743L` / Airbus A330-743L / RR Trent 772B / robust distance `0.216692`.
+- 3 engines: `FAL900EX` / Dassault FAL900EX / TFE731-60 / robust distance `0.000000`.
+- 4 engines: `747400RN` / Boeing 747400RN / PW4062A / robust distance `0.000000`.
 
-## Exact separation and learning layout
+The three-engine and four-engine categories each contain only one v6.3 candidate. Their zero distances express singleton category medians; those aircraft are not general representatives of their engine-count populations.
 
-Training uses 91 other jet curves; testing uses 3 frozen curves. Each approach task has 270 training and 10 held-out power rows; each departure task has 370 training and 16 held-out rows. Across all tasks the test has 104 power rows × 10 distances = 1040 truth cells.
+## Family purge and exact separation
 
-Each model input is `[jet/turboprop/piston one-hot, engine count, log10(MTOW), log10(MLW), MLW/MTOW, log10(static thrust per engine), log10(total static thrust), noise chapter, log10(converted row power in lbf), throttle]`. The target is the ten-distance NPD level vector. The held-out power grid is part of the requested prediction; held-out noise levels are used only for scoring.
+Before fitting, the conservative predeclared family guard removes `CF680E`, `TRENT7`, `JT9DBD`, `JT9DFL`, `JT9D7Q`, `PW4056`, and `GENX67` from the legacy training pool because they are A330/747 family analogues of the selected references. Falcon 20 is not automatically purged: no broad Falcon-name heuristic is used.
 
-ET builds 500 highly randomized trees (`max_depth=24`, `max_features=0.5`, leaf size 1). RF builds 200 bootstrap trees (leaf size 2). Both use the frozen production settings and the normal non-increasing distance projection.
+The resulting train/test split is 76/3 curves. Training contains 57 twin, 9 tri, and 10 quad curves. Per task it contains 216 approach and 297 departure power rows. The test contains 12 approach and 17 departure rows per metric: 29 per metric × 4 metrics = 116 rows and 1160 power-distance cells.
 
-The separate `PhysicsNPDModel` is not trained or evaluated here. It remains an independent component-source cross-check for SEL and LAmax only; it does not supply features or targets to ET/RF.
+FAL900EX grids are approach `{500, 1000, 1500, 2000}` lbf and departure `{2500, 3000, 3500, 4000, 4500, 4700}` lbf. The contract fails if these grids, the source split, purge set, counts, ACFT_ID separation, or selected references drift.
 
-## Measured results by category
+## Models and metrics
+
+Production Extra Trees (ET) and Random Forest (RF) are fitted independently for all eight EPNL, LAmax, PNLTM and SEL × approach/departure tasks. The standard 12 learned features and monotone distance projection are unchanged. `PhysicsNPDModel` remains an independent SEL/LAmax component-source route and supplies neither features nor targets to this experiment.
+
+- `error = prediction − truth`
+- `RMSE = sqrt(mean(error²))`
+- `MAE = mean(abs(error))`
+- `bias = mean(error)`
+- `p90 = percentile(abs(error), 90)`
+- `within ±k dB = 100 × mean(abs(error) ≤ k)`
+
+Cell-pooled results weight every power-distance cell equally. Category-balanced results calculate metrics per engine-count category and give each of the three categories equal weight; balanced RMSE is the square root of mean category MSE.
 
 | model | aggregation | engine_count_category | rmse_dB | mae_dB | bias_dB | p90_abs_error_dB | pct_within_3_dB | pct_within_5_dB | n_cells |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| et | cell_pooled | 2 | 4.611 | 4.269 | 4.248 | 6.610 | 28.000 | 63.000 | 400 |
-| et | cell_pooled | 3 | 2.229 | 1.863 | -1.733 | 3.228 | 85.833 | 98.333 | 240 |
-| et | cell_pooled | 4 | 6.636 | 6.310 | -6.310 | 9.452 | 0.000 | 28.500 | 400 |
-| rf | cell_pooled | 2 | 4.534 | 4.294 | 4.288 | 6.255 | 20.000 | 64.500 | 400 |
-| rf | cell_pooled | 3 | 4.459 | 3.914 | -3.867 | 6.334 | 37.083 | 55.833 | 240 |
-| rf | cell_pooled | 4 | 4.893 | 4.547 | -4.547 | 7.136 | 18.000 | 69.500 | 400 |
+| et | category_balanced | all | 3.931 | 3.213 | 0.459 | 6.010 | 50.648 | 73.343 | 1160 |
+| et | cell_pooled | all | 3.953 | 3.239 | 0.545 | 6.425 | 50.000 | 72.931 | 1160 |
+| rf | category_balanced | all | 3.868 | 3.193 | 0.413 | 5.785 | 51.972 | 74.491 | 1160 |
+| rf | cell_pooled | all | 3.900 | 3.231 | 0.491 | 6.398 | 51.121 | 73.966 | 1160 |
+
+## Results by reference category
+
+| model | aggregation | engine_count_category | rmse_dB | mae_dB | bias_dB | p90_abs_error_dB | pct_within_3_dB | pct_within_5_dB | n_cells |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| et | cell_pooled | 2 | 3.240 | 2.440 | -2.021 | 5.972 | 69.444 | 85.278 | 360 |
+| et | cell_pooled | 3 | 2.993 | 2.232 | -1.562 | 5.386 | 74.500 | 88.000 | 400 |
+| et | cell_pooled | 4 | 5.187 | 4.966 | 4.961 | 6.672 | 8.000 | 46.750 | 400 |
+| rf | cell_pooled | 2 | 2.765 | 2.087 | -1.855 | 5.222 | 76.667 | 89.722 | 360 |
+| rf | cell_pooled | 3 | 3.121 | 2.503 | -1.894 | 5.271 | 67.000 | 88.500 | 400 |
+| rf | cell_pooled | 4 | 5.244 | 4.987 | 4.987 | 6.863 | 12.250 | 45.250 | 400 |
 
 ![Overall metrics](jet_reference_assets/jet_reference_metrics.png)
 
-RMSE emphasizes large misses; MAE is the typical absolute cell error; signed bias is positive when the model overpredicts; p90 is the 90th percentile absolute error. “Within ±3/±5 dB” is the percentage of correlated cells inside those bands, not a probability of aircraft-level success.
+“Within ±3 dB” and “within ±5 dB” are threshold-agreement percentages over correlated cells. They are not aircraft-level success rates, confidence probabilities, or certification margins.
 
-![Actual versus predicted curves](jet_reference_assets/jet_reference_npd_comparison.png)
+![Truth versus prediction](jet_reference_assets/jet_reference_npd_comparison.png)
 
 ![Residual heatmap](jet_reference_assets/jet_reference_residual_heatmap.png)
 
-## Limitations and conclusion
+## Limitations
 
-- Three independent curves are too few for a population-wide accuracy or certification claim.
-- Selection is representative only in three available descriptor dimensions; engine technology, geometry and family labels are not part of the rule.
-- Power rows and distance cells within one curve are strongly correlated. Category-balanced results therefore matter alongside cell-pooled results.
-- These references are interpolation-oriented conventional jets, not evidence for unconventional configurations or unseen families.
+- Only three independent NPD curves are tested; 1,160 cells do not constitute 1,160 independent aircraft.
+- Tri- and quad-engine results each come from a singleton v6.3 candidate and cannot establish category-wide performance.
+- Descriptor selection covers only weight, installed static thrust and noise chapter; it omits detailed geometry and engine technology.
+- The conservative A330/747 purge reduces obvious family leakage but cannot prove the absence of all engineering similarity.
+- Findings apply to these conventional jets and eight NPD tasks, not unconventional configurations, fleet-wide accuracy, or certification.
 
-This experiment is a transparent, pre-frozen sanity check: it shows how the production ET/RF models behave on three typical jet curves with strict identity separation. It supplements, but does not replace, the broader grouped and temporal validation report.
+## Reproducibility and provenance
 
-## Reproducibility
-
-- Seed `20260724`; runtime `9.003` s.
+- Seed `20260724`; runtime `7.857` s.
 - Datastore SHA-256 `9b3ea2f58347ebb348128c49b3238e6a0b28852858fa7e87c89fad51d5e9fe8e`.
 - Source-manifest SHA-256 `316d3362f1b064a54f6be1f026a11c3fe297a0172e4ad95fc44ba4e7e8e0683f`.
-- Git `a1d488487e91041d5d1b60d17f627e84d5f56618`, dirty `True`.
-
-All candidate scores, split roles, predictions, per-fit records, detailed task/category summaries and environment metadata are in `outputs/model_validation/jet_reference`.
+- Git `fa736685444f0ebdd64f019f21b3a368007b823d`, dirty `True`.
+- Full candidate scores, reference metadata, split exclusions, predictions, fit records, summaries, source manifest, artifact hashes and official URLs are in `outputs/model_validation/jet_reference_v63`.
