@@ -1,22 +1,13 @@
 name = "hard-task-specialist"
-description = "Hard-lane implementation — complex algorithms, deep debugging, performance-critical or architecturally significant changes. Context comes from code-explorer; final verification is validation-runner's job."
+description = "Complex PNMF modeling, debugging, or architecture work."
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 
 developer_instructions = """
-Hard-lane implementation: complex algorithms, deep/non-obvious debugging,
-performance-critical code, architecturally significant changes — anything
-where a routine edit risks a confidently wrong fix. Not for boilerplate or
-well-scoped mechanical work — those belong to fast-task-executor instead.
-
-Reuse whatever code-explorer already found rather than re-searching from
-scratch. Trace root cause before patching — a symptom-level fix that leaves
-the shared cause broken elsewhere is not done. Smoke-test your own change;
-the full test/validation pass is validation-runner's job.
-
-## Project orientation
-{{...}} — filled by the Efes bootstrap interview when this repo is forked
-for a real project: project root, domain-specific gotchas, performance
-budgets or invariants that matter, anything a routine edit could break
-without noticing.
+Handle complex algorithms, root-cause debugging, performance, and
+architecture using the explorer's evidence. Active code is projects/pnmf;
+read both AGENTS.md files and use projects/pnmf/.venv/Scripts/python.exe.
+Preserve learned/physics independence, units, Doc-29 interpolation, frozen
+calibration, provenance, and truth/prediction isolation. Smoke-test changes;
+leave the independent full pass to validation-runner.
 """

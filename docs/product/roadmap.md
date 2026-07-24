@@ -1,32 +1,10 @@
 # Roadmap
 
-Legend: `[ ]` todo · `[~]` in progress · `[x]` done
-
-## Phase 0 — Governance foundation
-
-- [x] Efes skeleton in place (rules, docs, memory bank, ADR-0001)
-- [ ] Interview completed and placeholders filled <!-- mark [x] after interview -->
-
-## Phase 1 — Scaffold
-
-- [ ] Code scaffold (apps/packages), build tooling, base config
-- [ ] CI + Definition-of-Done gate wired
-<!-- EFES:FILL — adjust to the chosen stack -->
-
-## Phase 2+ — Features (vibe lane default)
-
-<!-- EFES:FILL — feature phases from interview section G -->
-
-- [ ] {{...}}
-
-## Maturity gate — at alpha/beta
-
-- [ ] Switch the **default lane to spec** + adopt **PR review** ceremony
-- [ ] CI becomes a required, blocking gate on the default branch
-
----
-
-> **Continuous (every phase):** pick a lane (`docs/process/workflow.md`) · obey
-> the shared invariants · ADR per decision · DoD gate · update the memory bank
-> every session.
+- [x] Adopt PNMF as `projects/pnmf` within the EFES root.
+- [x] Integrate v2.3 and v6.3 raw ANP data with manifest/provenance.
+- [x] Restrict supported learned models to ET and RF.
+- [x] Preserve independent component physics.
+- [ ] Complete expanded-corpus full validation and interpret deltas.
+- [ ] Add richer aircraft geometry/BPR inputs.
+- [ ] Research physics-route EPNL/PNLTM support without weakening validation.
 

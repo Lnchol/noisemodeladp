@@ -11,6 +11,8 @@ vendor/
 .venv/
 venv/
 __pycache__/
+*.py[cod]
+**/.pytest_cache/
 
 # --- Build output / artifacts ---
 dist/
@@ -20,8 +22,6 @@ target/
 *.log
 
 # --- Agent-local state (personal permissions/settings, never shared) ---
-# Covers any tool's local overrides (.claude/settings.local.json,
-# .cursor/mcp.local.json, …), not one vendor.
 **/*.local.json
 
 # --- OS / editor ---
@@ -35,3 +35,14 @@ Thumbs.db
 coverage/
 .cache/
 .tmp/
+
+# --- PNMF local data and regenerated artifacts ---
+projects/pnmf/*.sqlite
+projects/pnmf/*.sqlite-*
+projects/pnmf/*.db
+projects/pnmf/03_data/**
+projects/pnmf/outputs/**
+!projects/pnmf/outputs/.gitkeep
+projects/pnmf/.streamlit/secrets.toml
+*.joblib
+*.pkl

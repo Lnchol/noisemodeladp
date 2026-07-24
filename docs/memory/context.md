@@ -1,25 +1,12 @@
 # Context
 
-> Current working state and tribal knowledge for the next agent.
-
-- **Stage:** Efes personalization layer complete (v0.6.0, see
-  `CHANGELOG.md`) — identity established, licensed, 4-agent roster
-  vendored for Claude Code + Codex. No concrete project has been forked
-  from this yet.
-- **Active constraints:** repo language is `{{REPO_LANGUAGE}}` (default
-  English) for the skeleton itself; a forked project picks its own during
-  its interview. License is proprietary (owner: Efe) — a fork should
-  confirm whether to keep that or pick its own (`EFES.md` §2A).
-- **Assets on hand:** the full governance skeleton (rules, docs, memory
-  bank) + a vendored, generic 4-role agent roster (`.claude/agents/`,
-  `.codex/agents/`) + general-manager model defaults
-  (`.claude/settings.json`, `.codex/config.toml`).
-- **Open questions:** identity, vision, stack, architecture, and roadmap are
-  still `{{...}}` placeholders — deliberately deferred until a real project
-  forks this repo. The 4 agent files' `{{...}}` project-orientation blocks
-  are also still generic, for the same reason.
-- **Hint for the next agent:** don't recreate the skeleton, the LICENSE, or
-  the 4 agent files — they exist. When a real project starts, fork this
-  repo, run the `EFES.md` interview, then **specialize** (don't recreate)
-  the agent files with that project's real paths/commands, and fill the
-  remaining placeholders.
+- Active application: `projects/pnmf`.
+- Runtime: Python 3 local venv at `projects/pnmf/.venv`; never use the unrelated
+  `python` on PATH.
+- Canonical raw corpus: EASA ANP legacy v2.3 plus v6.3 CSV supplement under
+  `projects/pnmf/03_data`; canonical runtime file is the rebuilt local SQLite.
+- Supported learned models: exactly `et` (default) and `rf`.
+- Independent physics route: `PhysicsNPDModel`, SEL/LAmax only, with explicit
+  BPR/component inputs and frozen A320-211 calibration.
+- Backup for the pre-migration tree:
+  `C:\Users\efeko\adp\framework\pnmf_project_2\pnmf_project_backup_20260724_114903`.

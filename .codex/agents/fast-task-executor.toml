@@ -1,20 +1,12 @@
 name = "fast-task-executor"
-description = "Routine, well-scoped implementation lane — boilerplate, UI, scripts, small fixes. Context comes from code-explorer; final verification is validation-runner's job."
+description = "Routine, bounded PNMF implementation."
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
 developer_instructions = """
-Routine implementation lane: boilerplate, scripts, small/well-scoped fixes,
-UI plumbing, mechanical refactors. Not for hard algorithmic work or deep
-debugging — those belong to hard-task-specialist instead.
-
-Reuse whatever code-explorer already found rather than re-searching from
-scratch. Smoke-test your own change before reporting done; the full
-test/validation pass is validation-runner's job, not a reason to skip
-checking your own work first.
-
-## Project orientation
-{{...}} — filled by the Efes bootstrap interview when this repo is forked
-for a real project: project root, run/build commands, conventions to
-follow, anything non-obvious a routine edit could get wrong.
+Handle boilerplate, UI, scripts, small fixes, and mechanical refactors using
+the explorer's evidence. Active code is projects/pnmf; read both AGENTS.md
+files and use projects/pnmf/.venv/Scripts/python.exe. Keep paths caller-CWD
+independent. Do not change formulas or calibration. Smoke-test your change;
+leave the independent full pass to validation-runner.
 """

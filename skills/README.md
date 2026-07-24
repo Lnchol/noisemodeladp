@@ -1,14 +1,8 @@
 # Skills
 
-A **skill** is a portable, tool-agnostic capability: a folder containing a
-`SKILL.md` file with YAML frontmatter (`name`, `description`) and a Markdown
-body, optionally bundling scripts or reference files alongside it. The agent
-only loads a skill's `description` until it decides the skill is relevant, then
-reads the full body — *progressive disclosure*.
-
-`SKILL.md` is supported across Claude Code, Codex CLI, Cursor, Gemini CLI,
-Copilot (agent mode), Cline, Roo Code, Goose, and more — so a skill written here
-is **not locked to one agent**.
+This is the canonical collection of reusable Codex skills. Each folder contains
+a `SKILL.md` with YAML frontmatter and may include scripts or references. Codex
+loads a skill's full body only when it is relevant.
 
 ## Layout
 
@@ -48,24 +42,13 @@ These ship with the Efes skeleton and apply to any project:
   directly and shared contracts live in one place.
 - **`commit-msg`** — format/validate a commit message against the chosen
   convention, only once a commit has been explicitly asked for.
-- **`specialize-agents`** — fill or refresh the 4 vendored agent files'
-  project-orientation blocks with this project's real paths and commands.
+- **`specialize-agents`** — refresh the four Codex role files with the
+  project's real paths, commands, and constraints.
 
-## Wiring (per tool in use)
+## Codex use
 
-This folder is the **single source**; no skill content is ever duplicated into
-a tool's format. But each tool discovers skills natively so that only the
-frontmatter `description` is loaded until a skill is actually needed
-(progressive disclosure — cheaper than reading every body every session):
-
-- **Claude Code** — symlink each skill folder into `.claude/skills/`:
-  `ln -s ../../skills/<name> .claude/skills/<name>`. **Ships pre-wired** in the
-  skeleton for every built-in skill.
-- **Other tools** (Cursor, Codex, Gemini, …) — their native skill/rule
-  location, pointing back here; generated on demand for tools actually in
-  use (`AGENTS.md` §7). Not pre-wired in this fork — only Claude Code is.
-
-Re-run/update the wiring whenever a skill is added or removed.
+Keep skill content here rather than duplicating it under `.codex`. Update the
+collection when repository conventions change.
 
 ## Project-specific (added after the interview)
 

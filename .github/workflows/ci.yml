@@ -1,44 +1,31 @@
-# Quality-gate CI — turns the Definition of Done into an enforced gate.
-# Templated: fill the placeholder TODO steps once the stack/commands exist
-# (Phase 1). Until then this workflow is a no-op scaffold and is safe to keep.
-
-name: ci
+name: PNMF data-independent checks
 
 on:
+  push:
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  quality-gate:
-    runs-on: ubuntu-latest
+  tracked-source-smoke:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
-      # --- Toolchain setup (uncomment/replace for your stack) ---
-      # - uses: actions/setup-node@v4
-      #   with: { node-version: '{{VERSION}}' }
-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Install
-        run: echo "TODO {{INSTALL_COMMAND}}" # e.g. npm ci
-
-      - name: Lint
-        run: echo "TODO {{LINT_COMMAND}}"
-
-      - name: Typecheck
-        run: echo "TODO {{TYPECHECK_COMMAND}}" # drop if untyped
-
-      - name: Test
-        run: echo "TODO {{TEST_COMMAND}}"
-
-      - name: Build
-        run: echo "TODO {{BUILD_COMMAND}}"
-
-      # Post-interview guard: no template placeholder may survive the
-      # bootstrap, in ANY tracked file (README.txt, .mdc rules, configs — not
-      # just .md/.yml). Enable (uncomment) after the Efes interview fills
-      # the skeleton — EFES.md is deleted by then; _template files and
-      # historical records (memory bank, ADRs, CHANGELOG), which may quote the
-      # placeholder syntax, are exempt.
-      # The pattern is written [{][{] so this file doesn't match itself.
-      # - name: No placeholders left
-      #   run: |
-      #     ! git grep -nE '[{][{]' -- ':!*_template*' ':!CHANGELOG.md' ':!docs/memory' ':!docs/architecture/adr'
+        run: python -m pip install -r projects/pnmf/requirements.txt
+      - name: Compile and import tracked source
+        working-directory: projects/pnmf
+        run: |
+          python -m compileall -q pnmf pnmf_cli.py tests/test_ci_smoke.py
+          python -c "import pnmf; from pnmf.models import SUPPORTED_LEARNERS; assert SUPPORTED_LEARNERS == ('et', 'rf')"
+      - name: Synthetic smoke tests (no ANP corpus)
+        working-directory: projects/pnmf
+        run: python -m pytest tests/test_ci_smoke.py -q
+      - name: Full-data boundary
+        shell: pwsh
+        run: |
+          Write-Host "GitHub CI intentionally excludes ignored ANP sources, SQLite, and outputs."
+          Write-Host "Run the full local suite and validate-model with provisioned ANP data."
+          Write-Host "Current full-data evidence: projects/pnmf/docs/MODEL_TRAINING_REPORT.md"

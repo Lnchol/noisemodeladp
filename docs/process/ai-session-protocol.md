@@ -1,8 +1,7 @@
-# AI session protocol
+# Codex session protocol
 
-The ritual every agent (and human) follows so that work survives handoffs.
-This file is the **canonical** copy — `AGENTS.md` §2 and `skills/wrap-session`
-point here; if the ritual changes, change it here.
+This is the active handoff protocol. Architecture ADRs and changelogs are
+historical records, not onboarding instructions.
 
 ## Start of session
 
@@ -10,17 +9,15 @@ point here; if the ritual changes, change it here.
 2. Read `docs/memory/context.md` — current working state and tribal knowledge.
 3. Read `docs/memory/progress.md` — what's done / in progress / next.
 4. Read `docs/memory/decisions.md` — the "why" log.
-5. Restate the immediate goal before touching anything.
+5. Read `projects/pnmf/AGENTS.md` before changing PNMF.
+6. Restate the immediate goal before touching anything.
 
 ## During the session
 
-- Follow the `workflow.md` loop: READ → SPEC → TEST → PLAN → BUILD → VERIFY → RECORD → COMMIT.
+- Use the Codex pipeline: explore → fast/hard implementation → validation.
 - Open an ADR the moment an architecture/tech decision is made.
 - Keep changes inside module boundaries; don't break contracts.
-- **Keep `AGENTS.md` stable.** It is read (and prompt-cached) at the start of
-  every session — churn there breaks the cache and re-bills the whole file.
-  Session-to-session state belongs in the memory bank; change `AGENTS.md` only
-  for real rule changes.
+- Keep `AGENTS.md` stable; session state belongs in the memory bank.
 
 ## End of session
 
@@ -31,10 +28,7 @@ point here; if the ritual changes, change it here.
    The archive is history; only `progress.md` is read every session.
 3. Update `docs/memory/context.md` if the working state or open questions changed.
 4. Append to `docs/memory/decisions.md` if a decision was locked (link the ADR).
-5. **Keep the thin wrappers pure pointers** (`CLAUDE.md`, `README.txt`,
-   `.cursor/rules/*`): they carry no rule content, so a rule change in
-   `AGENTS.md` needs no re-sync — if one has grown a rule summary, strip it
-   back to a pointer. In the skeleton repo, also re-sync the `README.md` trees
-   when the file layout changed.
+5. Update `README.md` only when active onboarding, commands, or report links
+   change.
 6. Run the Definition of Done gate for anything you're calling complete.
-7. **Do not commit** unless the user asked.
+7. Do not commit or push unless the user asked.

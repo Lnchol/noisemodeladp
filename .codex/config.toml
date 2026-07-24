@@ -1,6 +1,2 @@
-# Optional: pin a default model for the top-level ("general manager") Codex
-# session — the one that decides delegation to .codex/agents/. Left unset so
-# this template works for anyone regardless of which models their account
-# has access to. To pin one: check `codex models list`, then uncomment and
-# fill in:
+# Optional top-level Codex model:
 # model = "gpt-5.x"
