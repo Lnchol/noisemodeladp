@@ -43,6 +43,7 @@ projects/pnmf/*.db
 projects/pnmf/03_data/**
 projects/pnmf/outputs/**
 !projects/pnmf/outputs/.gitkeep
+projects/pnmf/tmp/**
 projects/pnmf/.streamlit/secrets.toml
 *.joblib
 *.pkl

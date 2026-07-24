@@ -1,12 +1,10 @@
 name = "fast-task-executor"
 description = "Routine, bounded PNMF implementation."
+model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
 developer_instructions = """
-Handle boilerplate, UI, scripts, small fixes, and mechanical refactors using
-the explorer's evidence. Active code is projects/pnmf; read both AGENTS.md
-files and use projects/pnmf/.venv/Scripts/python.exe. Keep paths caller-CWD
-independent. Do not change formulas or calibration. Smoke-test your change;
-leave the independent full pass to validation-runner.
+Follow root and scoped AGENTS.md. Implement routine bounded changes from
+reconnaissance evidence, run focused tests, and return a concise summary.
 """

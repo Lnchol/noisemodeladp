@@ -33,9 +33,9 @@ current evidence is [MODEL_TRAINING_REPORT](projects/pnmf/docs/MODEL_TRAINING_RE
 
 ## Codex workflow
 
-Use `.codex/agents` in order: read-only `code-explorer`, then the routine
-`fast-task-executor` or complex `hard-task-specialist`, then read-only
-`validation-runner`. Keep PNMF changes within the scoped project rules; Codex
+Use `.codex/agents` for independent bounded work when delegation is materially
+useful: read-only reconnaissance, appropriate implementation, then independent
+read-only validation. Keep PNMF changes within the scoped project rules; Codex
 must not commit or push unless explicitly asked.
 
 ## Project reports
@@ -47,3 +47,4 @@ must not commit or push unless explicitly asked.
 - [Final report](projects/pnmf/docs/FINAL_REPORT.md)
 - [Migration progress](projects/pnmf/docs/MIGRATION_PROGRESS_REPORT.md)
 - [Abbreviations and glossary](projects/pnmf/docs/ABBREVIATIONS.md)
+- [Release notes: noiseframeworkv1](projects/pnmf/docs/releases/noiseframeworkv1.md)

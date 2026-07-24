@@ -1,7 +1,39 @@
-# PNMF — Parametric Noise Modeling Framework
+# PNMF - Parametric Noise Modeling Framework
 
 PNMF turns a parametric aircraft definition into ANP/Doc-29-compatible
 Noise-Power-Distance tables for conceptual screening.
+
+## INPUT -> FORMULAS -> OUTPUT
+
+**INPUT.** Each learned sample is a 12-value vector:
+
+`x = [engine-type one-hot (3), engine count, log10(MTOW), log10(MLW),
+MLW/MTOW, log10(thrust/engine), log10(total thrust), noise chapter,
+log10(unit-corrected power), throttle]`.
+
+**FORMULAS.** For each metric/mode, an Extra Trees or Random Forest ensemble
+predicts all ten distances jointly:
+
+`L_hat(x) = (1/T) sum(t_i(x))`.
+
+Tree-to-tree standard deviation is reported as a dispersion heuristic, not a
+calibrated confidence interval. Each predicted row is projected to the nearest
+non-increasing sequence in `log10(distance)`. Doc-29 lookup then interpolates
+the row linearly in `log10(distance)` and interpolates/extrapolates linearly in
+power:
+
+`L(P,d) = interp_P(P, interp_logd(log10(d), L_at_standard_distances))`.
+
+The separate physics route energetically combines jet mixing
+(`acoustic power proportional to V_jet^8`), fan, and airframe sources, then
+applies spherical spreading, atmospheric absorption, A-weighting, and flyover
+integration. It produces SEL and LAmax only; its component geometry and bypass
+ratio (BPR) are physics-only assumptions because those inputs are unavailable
+in the learned ANP feature set.
+
+**OUTPUT.** Each power setting gets ten NPD levels at 200, 400, 630, 1,000,
+2,000, 4,000, 6,300, 10,000, 16,000, and 25,000 ft. The learned route covers
+all eight tasks: SEL, LAmax, EPNL, and PNLTM for approach and departure.
 
 ## Basic architecture
 
@@ -63,4 +95,5 @@ corpus. Current full-data protocols, results, input hashes, and limitations are
 recorded in [MODEL_TRAINING_REPORT](docs/MODEL_TRAINING_REPORT.md).
 
 See [HOW_IT_WORKS](docs/HOW_IT_WORKS.md), [NPD design](docs/NPD_SYSTEM_DESIGN.md),
-and the [migration progress report](docs/MIGRATION_PROGRESS_REPORT.md).
+the [migration progress report](docs/MIGRATION_PROGRESS_REPORT.md), and the
+[noiseframeworkv1 release notes](docs/releases/noiseframeworkv1.md).

@@ -6,15 +6,15 @@ Repository language is English.
 
 ## Workflow
 
-Use the Codex roles in `.codex/agents`:
+Use subagents only when independent, bounded work makes them materially
+useful. Do not delegate trivial work or tightly sequential steps. When useful,
+route reconnaissance to `code-explorer`, implementation to
+`fast-task-executor` or `hard-task-specialist`, and independent validation to
+`validation-runner`.
 
-1. `code-explorer` locates relevant code and constraints without editing.
-2. `fast-task-executor` handles routine, bounded work; use
-   `hard-task-specialist` for deep debugging or architectural/model changes.
-3. `validation-runner` independently runs the applicable checks without edits.
-
-Keep ownership explicit and do not overwrite unrelated work. Add tests and
-validation evidence for behavior changes. Do not commit or push unless asked.
+Keep ownership explicit, report concise evidence summaries rather than raw
+logs, and do not overwrite unrelated work. Add tests and validation evidence
+for behavior changes. Do not commit or push unless asked.
 
 ## PNMF routing and safety
 

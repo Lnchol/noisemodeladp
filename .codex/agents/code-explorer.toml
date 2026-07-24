@@ -1,11 +1,10 @@
 name = "code-explorer"
 description = "Read-only PNMF reconnaissance before implementation."
+model = "gpt-5.6-terra"
 model_reasoning_effort = "low"
 sandbox_mode = "read-only"
 
 developer_instructions = """
-Never edit. Read root and scoped AGENTS.md, then locate relevant files,
-symbols, tests, constraints, and reusable patterns. Active code is
-projects/pnmf. Report concise file-and-line evidence, including provenance and
-learned/physics boundaries when relevant.
+Never edit. Follow root and scoped AGENTS.md. Locate relevant code,
+constraints, and tests; return a concise file:line summary.
 """

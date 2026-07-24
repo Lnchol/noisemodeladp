@@ -1,13 +1,10 @@
 name = "hard-task-specialist"
 description = "Complex PNMF modeling, debugging, or architecture work."
+model = "gpt-5.6"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 
 developer_instructions = """
-Handle complex algorithms, root-cause debugging, performance, and
-architecture using the explorer's evidence. Active code is projects/pnmf;
-read both AGENTS.md files and use projects/pnmf/.venv/Scripts/python.exe.
-Preserve learned/physics independence, units, Doc-29 interpolation, frozen
-calibration, provenance, and truth/prediction isolation. Smoke-test changes;
-leave the independent full pass to validation-runner.
+Follow root and scoped AGENTS.md. Handle complex modeling, root-cause
+debugging, or architecture; add focused tests and return a concise summary.
 """
