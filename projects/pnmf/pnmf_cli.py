@@ -8,6 +8,7 @@ Commands:
   predict   predict + QA-gate + store NPD tables for a future aircraft
   validate  LOO validation of the supported ET and RF learned models
   validate-model reproducible aircraft-grouped + temporal ET/RF validation
+  validate-jet-reference frozen representative Jet ET/RF holdout
   physics   physics-route calibration + fleet validation + BPR sweep
   demo      end-to-end demo: generate NPD, validate, synthesize, sideline
   compare   LOO bake-off of Extra Trees and Random Forest
@@ -242,6 +243,13 @@ def cmd_validate_model():
     tables.
     """
     from pnmf.validation import main
+
+    raise SystemExit(main(sys.argv[1:]))
+
+
+def cmd_validate_jet_reference():
+    """Run the frozen representative-jet ET/RF holdout experiment."""
+    from pnmf.jet_reference_validation import main
 
     raise SystemExit(main(sys.argv[1:]))
 
@@ -868,6 +876,7 @@ COMMANDS = {
     "predict": cmd_predict,
     "validate": cmd_validate,
     "validate-model": cmd_validate_model,
+    "validate-jet-reference": cmd_validate_jet_reference,
     "physics": cmd_physics,
     "demo": cmd_demo,
     "compare": cmd_compare,

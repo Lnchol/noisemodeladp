@@ -18,6 +18,7 @@ function Show-Usage {
     Write-Host "  test      - run the pytest suite (tests/)"
     Write-Host "  validate  - LOO validation (default: all 8 metric:mode pairs)"
     Write-Host "  validate-model - current grouped + temporal ET/RF validation"
+    Write-Host "  validate-jet-reference - frozen representative Jet ET/RF holdout"
     Write-Host "  physics   - physics-route calibration + fleet validation"
     Write-Host "  demo      - end-to-end demo"
     Write-Host "  compare   - LOO bake-off of all candidate models"
@@ -56,6 +57,10 @@ switch ($Task) {
     "validate-model" {
         Assert-Venv
         & $PythonExe $Cli validate-model @Rest
+    }
+    "validate-jet-reference" {
+        Assert-Venv
+        & $PythonExe $Cli validate-jet-reference @Rest
     }
     "subs" {
         Assert-Venv
