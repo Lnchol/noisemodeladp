@@ -1,0 +1,14 @@
+{
+  "schema_version": 2,
+  "active_work_id": "physics-reference-harness",
+  "works": {
+    "physics-reference-harness": {
+      "work_id": "physics-reference-harness",
+      "active_plan": ".omo/plans/physics-reference-harness.md",
+      "plan_name": "physics-reference-harness",
+      "session_ids": ["codex:019fb4f6-7b07-75d1-95db-e480ffafdda3"],
+      "status": "active",
+      "worktree_path": null
+    }
+  }
+}

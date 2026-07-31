@@ -14,7 +14,7 @@ NPD/Doc-29 world those are applied by the CONSUMER tool (SAE-AIR-5662 etc.),
 and NPD tables themselves are defined for this idealised geometry.
 """
 from __future__ import annotations
-from typing import Literal, overload
+from typing import Any, Generic, Literal, Mapping, Protocol, TypeVar, overload
 import numpy as np
 
 # 1/3-octave band CENTRE frequencies [Hz] - same 24 bands as the ANP
@@ -115,11 +115,262 @@ Engine-cycle state from (thrust setting, design): a deliberately simple,
 documented mapping - see EngineState. All engine sources scale with the
 per-engine corrected net thrust that the NPD power axis uses.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 
 
 F_BANDS = THIRD_OCTAVE_HZ
+
+
+@dataclass(frozen=True)
+class InputStatus:
+    """Declared origin and completeness of a physical input.
+
+    ``source`` is deliberately a small, serialisable contract: values are
+    ``supplied``, ``estimated`` or ``unavailable``. The component physics
+    route never upgrades an estimated input to supplied.
+    """
+    source: Literal["supplied", "estimated", "unavailable"] = "unavailable"
+    complete: bool = False
+    note: str = ""
+
+
+T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class PhysicalInput(Generic[T]):
+    """A physical quantity together with its declared evidence status."""
+    value: T | None
+    status: Literal["supplied", "estimated", "unavailable"]
+    note: str = ""
+
+    @property
+    def available(self) -> bool:
+        return self.value is not None and self.status != "unavailable"
+
+    def or_value(self, fallback: T) -> T:
+        return self.value if self.available else fallback
+
+
+@dataclass(frozen=True)
+class JetStream:
+    """One actual exhaust stream for the detailed Stone-style path."""
+    velocity_ms: float
+    mass_flow_kg_s: float
+    diameter_m: float
+    temperature_k: float = 450.0
+    total_pressure_pa: float | None = None
+    name: Literal["outer", "inner", "intermediate", "merged"] = "outer"
+    status: Literal["supplied", "estimated"] = "supplied"
+
+
+@dataclass(frozen=True)
+class FanDeck:
+    """Fan-map inputs required before the detailed Heidmann path is used."""
+    mass_flow_kg_s: float
+    tip_speed_ms: float
+    blade_count: int
+    rotor_diameter_m: float
+    temperature_rise_k: float
+    rpm: float | None = None
+    n1_percent: float | None = None
+    stator_count: int | None = None
+    rotor_stator_spacing_m: float | None = None
+    status: Literal["supplied", "estimated"] = "supplied"
+
+
+@dataclass(frozen=True)
+class CoreStream:
+    """Optional core source; it is usable only with all fields populated."""
+    velocity_ms: float
+    mass_flow_kg_s: float
+    diameter_m: float
+    temperature_k: float
+    combustor_exit_temperature_k: float | None = None
+    total_pressure_pa: float | None = None
+    turbine_attenuation_db: float | None = None
+    status: Literal["supplied", "estimated"] = "supplied"
+
+
+@dataclass(frozen=True)
+class EnginePhysicalInputs:
+    """Component-ready engine inputs; every field carries visible provenance."""
+    thrust_n: PhysicalInput[float]
+    bypass_ratio: PhysicalInput[float]
+    mass_flow_kg_s: PhysicalInput[float]
+    nozzle_exit_area_m2: PhysicalInput[float]
+    nozzle_exit_velocity_ms: PhysicalInput[float]
+    nozzle_exit_temperature_k: PhysicalInput[float]
+    nozzle_exit_pressure_pa: PhysicalInput[float]
+    fan_diameter_m: PhysicalInput[float]
+    rpm: PhysicalInput[float]
+    n1_percent: PhysicalInput[float]
+    blade_count: PhysicalInput[int]
+    stator_count: PhysicalInput[int]
+    rotor_stator_spacing_m: PhysicalInput[float]
+    fan_temperature_rise_k: PhysicalInput[float]
+    core_mass_flow_kg_s: PhysicalInput[float]
+    combustor_inlet_temperature_k: PhysicalInput[float]
+    combustor_exit_temperature_k: PhysicalInput[float]
+    turbine_attenuation_db: PhysicalInput[float]
+
+
+@dataclass(frozen=True)
+class AirframeGeometry:
+    """Typed optional geometry/state contract for airframe component models."""
+    wing_area_m2: float | None = None
+    span_m: float | None = None
+    flap_area_m2: float | None = None
+    slat_area_m2: float | None = None
+    slat_chord_m: float | None = None
+    slat_deg: float | None = None
+    wheel_diameter_m: float | None = None
+    strut_diameter_m: float | None = None
+    nose_wheel_count: int | None = None
+    main_wheel_count: int | None = None
+    flap_deg: float | None = None
+    slats_out: bool | None = None
+    gear_down: bool | None = None
+
+
+@dataclass(frozen=True)
+class AirframePhysicalInputs:
+    """Airframe geometry/configuration contract with per-field evidence."""
+    wing_area_m2: PhysicalInput[float]
+    wing_span_m: PhysicalInput[float]
+    flap_area_m2: PhysicalInput[float]
+    flap_chord_m: PhysicalInput[float]
+    flap_deflection_deg: PhysicalInput[float]
+    slat_area_m2: PhysicalInput[float]
+    slat_chord_m: PhysicalInput[float]
+    slat_deflection_deg: PhysicalInput[float]
+    nose_wheel_count: PhysicalInput[int]
+    nose_wheel_diameter_m: PhysicalInput[float]
+    nose_strut_diameter_m: PhysicalInput[float]
+    main_wheel_count: PhysicalInput[int]
+    main_wheel_diameter_m: PhysicalInput[float]
+    main_strut_diameter_m: PhysicalInput[float]
+    gear_down: PhysicalInput[bool]
+
+
+@dataclass(frozen=True)
+class Atmosphere:
+    temperature_c: float = 15.0
+    relative_humidity_percent: float = 70.0
+    pressure_kpa: float = 101.325
+
+
+@dataclass(frozen=True)
+class AtmosphericPhysicalInputs:
+    temperature_c: PhysicalInput[float]
+    relative_humidity_percent: PhysicalInput[float]
+    pressure_kpa: PhysicalInput[float]
+
+
+@dataclass(frozen=True)
+class TrajectoryState:
+    """Full future trajectory contract; the adapter uses its NPD subset."""
+    position_m: tuple[float, float, float]
+    true_airspeed_ms: float
+    mach: float | None = None
+    altitude_m: float | None = None
+    pitch_deg: float = 0.0
+    roll_deg: float = 0.0
+    yaw_deg: float = 0.0
+    thrust_per_engine_n: float | None = None
+    configuration: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class FlightTrajectoryInputs:
+    """Trajectory-ready state contract with explicit input provenance."""
+    position_m: PhysicalInput[tuple[float, float, float]]
+    true_airspeed_ms: PhysicalInput[float]
+    mach: PhysicalInput[float]
+    altitude_m: PhysicalInput[float]
+    attitude_deg: PhysicalInput[tuple[float, float, float]]
+    thrust_per_engine_n: PhysicalInput[float]
+    configuration: PhysicalInput[Mapping[str, Any]]
+
+    def to_flight_state(self, *, time_s: float,
+                        emission_angle_deg: float,
+                        atmosphere: Atmosphere | None = None) -> "FlightState":
+        """Convert a complete trajectory sample to the source interface."""
+        required = {
+            "position_m": self.position_m,
+            "true_airspeed_ms": self.true_airspeed_ms,
+            "altitude_m": self.altitude_m,
+            "thrust_per_engine_n": self.thrust_per_engine_n,
+            "configuration": self.configuration,
+        }
+        missing = [name for name, value in required.items()
+                   if not value.available]
+        if missing:
+            raise ValueError(
+                "flight trajectory state unavailable: " + ", ".join(missing))
+        position = self.position_m.value
+        assert position is not None
+        return FlightState(
+            time_s=time_s, x_m=float(position[0]),
+            altitude_m=float(self.altitude_m.value),
+            true_airspeed_ms=float(self.true_airspeed_ms.value),
+            emission_angle_deg=float(emission_angle_deg),
+            position_m=position,
+            mach=(float(self.mach.value) if self.mach.available else None),
+            attitude_deg=(
+                self.attitude_deg.value if self.attitude_deg.available
+                else (0.0, 0.0, 0.0)),
+            thrust_per_engine_n=float(self.thrust_per_engine_n.value),
+            configuration=dict(self.configuration.value),
+            atmosphere=atmosphere)
+
+
+@dataclass(frozen=True)
+class FlightState:
+    """Instantaneous straight-flight state supplied to the event integrator."""
+    time_s: float
+    x_m: float
+    altitude_m: float
+    true_airspeed_ms: float
+    emission_angle_deg: float
+    position_m: tuple[float, float, float] | None = None
+    mach: float | None = None
+    attitude_deg: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    thrust_per_engine_n: float | None = None
+    configuration: Mapping[str, Any] = field(default_factory=dict)
+    atmosphere: Atmosphere | None = None
+
+
+class FlightStateSource(Protocol):
+    """Extension point for installation/trajectory tools.
+
+    It supplies instantaneous states; this module intentionally does not
+    apply installation or propagation corrections beyond free-field loss.
+    """
+    def state(self, *, x_m: float, closest_distance_m: float,
+              true_airspeed_ms: float,
+              thrust_per_engine_n: float | None = None,
+              configuration: Mapping[str, Any] | None = None,
+              atmosphere: Atmosphere | None = None) -> FlightState: ...
+
+
+@dataclass(frozen=True)
+class Reference160KtFlightPath:
+    """Doc-29 NPD adapter for a steady, level 160-kt flyover."""
+    speed_ms: float = NPD_REF_SPEED_MS if 'NPD_REF_SPEED_MS' in globals() else 160.0 * KT2MS
+
+    def state(self, *, x_m: float, closest_distance_m: float,
+              true_airspeed_ms: float | None = None,
+              thrust_per_engine_n: float | None = None,
+              configuration: Mapping[str, Any] | None = None,
+              atmosphere: Atmosphere | None = None) -> FlightState:
+        speed = self.speed_ms if true_airspeed_ms is None else true_airspeed_ms
+        theta = float(np.degrees(np.arctan2(closest_distance_m, -x_m)))
+        return FlightState(
+            x_m / speed, x_m, closest_distance_m, speed, theta,
+            (x_m, 0.0, closest_distance_m), speed / C0, (0.0, 0.0, 0.0),
+            thrust_per_engine_n, dict(configuration or {}), atmosphere)
 
 
 def _interp_dir(theta_deg, table_theta, table_db):
@@ -159,10 +410,16 @@ class EngineState:
     d_jet: float
     m_tip: float
     bpf_hz: float
+    jet_streams: tuple[JetStream, ...] = ()
+    fan_deck: FanDeck | None = None
+    core_stream: CoreStream | None = None
+    input_status: Mapping[str, InputStatus] = field(default_factory=dict)
 
     @classmethod
     def from_design(cls, thrust_per_engine_n, max_thrust_per_engine_n,
-                    bpr, fan_diameter_m=None, n_blades=24):
+                    bpr, fan_diameter_m=None, n_blades=24,
+                    jet_streams=(), fan_deck=None, core_stream=None,
+                    physical_inputs: EnginePhysicalInputs | None = None):
         F = max(float(thrust_per_engine_n), 1.0)
         Fmax = max(float(max_thrust_per_engine_n), F)
         v_max = 700.0 / (1.0 + bpr) ** 0.44
@@ -177,8 +434,30 @@ class EngineState:
             mdot_max = Fmax / v_max
             a_fan = mdot_max / (RHO0 * 0.45 * C0)
             fan_diameter_m = np.sqrt(4.0 * a_fan / np.pi)
+        statuses = {}
+        if physical_inputs is not None:
+            v_j = float(physical_inputs.nozzle_exit_velocity_ms.or_value(v_j))
+            mdot = float(physical_inputs.mass_flow_kg_s.or_value(mdot))
+            a_jet = float(
+                physical_inputs.nozzle_exit_area_m2.or_value(a_jet))
+            d_jet = np.sqrt(4.0 * a_jet / np.pi)
+            fan_diameter_m = float(
+                physical_inputs.fan_diameter_m.or_value(fan_diameter_m))
+            supplied_mixed = all(
+                item.status == "supplied" and item.available for item in (
+                    physical_inputs.nozzle_exit_velocity_ms,
+                    physical_inputs.nozzle_exit_area_m2,
+                    physical_inputs.nozzle_exit_temperature_k,
+                    physical_inputs.nozzle_exit_pressure_pa,
+                ))
+            statuses["mixed_jet"] = InputStatus(
+                "supplied" if supplied_mixed else "estimated",
+                supplied_mixed,
+                "typed nozzle inputs" if supplied_mixed
+                else "typed/legacy mixed-nozzle estimates")
         bpf = m_tip * C0 / (np.pi * fan_diameter_m) * n_blades
-        return cls(F, v_j, mdot, a_jet, d_jet, m_tip, bpf)
+        return cls(F, v_j, mdot, a_jet, d_jet, m_tip, bpf,
+                   tuple(jet_streams), fan_deck, core_stream, statuses)
 
 
 # ---------------------------------------------------------------------------
@@ -194,13 +473,94 @@ class JetSource:
         self.c = c_jet
         self.f_scale = f_scale   # spectral placement calibration (see physicsmodel)
 
-    def band_spl_1m(self, st: EngineState, theta_deg):
+    STREAM_DIR_OFFSET = {
+        "outer": -1.0, "inner": 1.5, "intermediate": 0.5, "merged": 0.0,
+    }
+
+    def component_spectra_with_diagnostics(self, st: EngineState, theta_deg):
+        """Return independently inspectable Stone virtual-source spectra."""
+        streams = tuple(s for s in st.jet_streams
+                        if s.velocity_ms > 0 and s.mass_flow_kg_s > 0
+                        and s.diameter_m > 0 and s.temperature_k > 0
+                        and s.total_pressure_pa is not None
+                        and s.total_pressure_pa > 0)
+        names = {s.name for s in streams}
+        if {"outer", "merged"}.issubset(names):
+            pieces = {}
+            for stream in streams:
+                area = np.pi * (stream.diameter_m / 2.0) ** 2
+                density_ratio = 288.15 / stream.temperature_k
+                oaspl = (self.c + 80.0 * np.log10(stream.velocity_ms / C0)
+                         + 10.0 * np.log10(area)
+                         + 20.0 * np.log10(max(density_ratio, 0.05))
+                         + _interp_dir(theta_deg, self.THETA, self.DIR)
+                         + self.STREAM_DIR_OFFSET[stream.name])
+                peak = self.f_scale * .25 * stream.velocity_ms / stream.diameter_m
+                width = 1.45 if stream.name == "inner" else 1.7
+                pieces[f"jet_{stream.name}"] = (
+                    oaspl + _haystack(F_BANDS, peak, width=width))
+            evidence = ("supplied"
+                        if all(s.status == "supplied" for s in streams)
+                        else "estimated")
+            return pieces, InputStatus(
+                evidence, evidence == "supplied",
+                "Stone multi-stream: outer and merged required; "
+                "inner/intermediate optional"
+                + ("; contains estimated stream data"
+                   if evidence == "estimated" else ""))
+        return {}, InputStatus(
+            "estimated", False,
+            "Stone multi-stream unavailable: supplied outer and merged stream "
+            "velocity, flow, diameter, temperature, and pressure required")
+
+    def spectrum_with_diagnostics(self, st: EngineState, theta_deg):
+        """Return spectrum and an explicit detailed/fallback source status."""
+        pieces, status = self.component_spectra_with_diagnostics(st, theta_deg)
+        if pieces:
+            stack = np.stack(list(pieces.values()))
+            spectrum = 10.0 * np.log10(
+                np.sum(10.0 ** (stack / 10.0), axis=0))
+            return spectrum, status
         oaspl = (self.c
                  + 80.0 * np.log10(st.v_jet / C0)
                  + 10.0 * np.log10(st.a_jet)
                  + _interp_dir(theta_deg, self.THETA, self.DIR))
         f_peak = self.f_scale * 0.25 * st.v_jet / max(st.d_jet, 0.05)  # St~0.25 x fitted shift
-        return oaspl + _haystack(F_BANDS, f_peak, width=1.6)
+        mixed_status = st.input_status.get(
+            "mixed_jet",
+            InputStatus("estimated", False, "legacy thrust/BPR estimate"))
+        return (oaspl + _haystack(F_BANDS, f_peak, width=1.6),
+                InputStatus(
+                    mixed_status.source, mixed_status.complete,
+                    "simplified mixed-jet path; " + mixed_status.note))
+
+    def band_spl_1m(self, st: EngineState, theta_deg):
+        return self.spectrum_with_diagnostics(st, theta_deg)[0]
+
+    def core_spectrum_1m(self, st: EngineState, theta_deg):
+        """Optional core contribution; absent unless a complete core is given."""
+        core = st.core_stream
+        if (core is None
+                or min(core.velocity_ms, core.mass_flow_kg_s,
+                       core.diameter_m, core.temperature_k) <= 0
+                or core.combustor_exit_temperature_k is None
+                or core.total_pressure_pa is None
+                or core.turbine_attenuation_db is None):
+            return None, InputStatus(
+                "unavailable", False,
+                "core disabled: core flow, combustor state, pressure, and "
+                "turbine attenuation are all required")
+        area = np.pi * (core.diameter_m / 2.0) ** 2
+        level = (self.c - 8.0 + 80.0 * np.log10(core.velocity_ms / C0)
+                 + 10.0 * np.log10(area) + _interp_dir(theta_deg, self.THETA, self.DIR))
+        peak = self.f_scale * .25 * core.velocity_ms / core.diameter_m
+        level -= core.turbine_attenuation_db
+        return (level + _haystack(F_BANDS, peak, width=1.7),
+                InputStatus(
+                    core.status, core.status == "supplied",
+                    "optional combustor/core source"
+                    + (" with estimated inputs"
+                       if core.status == "estimated" else "")))
 
 
 class FanSource:
@@ -214,7 +574,60 @@ class FanSource:
         self.c = c_fan
         self.f_scale = f_scale
 
-    def band_spl_1m(self, st: EngineState, theta_deg):
+    def component_spectra_with_diagnostics(self, st: EngineState, theta_deg):
+        deck = st.fan_deck
+        complete = (
+            deck is not None
+            and min(deck.mass_flow_kg_s, deck.tip_speed_ms,
+                    deck.rotor_diameter_m, deck.temperature_rise_k) > 0
+            and deck.blade_count > 0
+            and deck.stator_count is not None and deck.stator_count > 0
+            and deck.rotor_stator_spacing_m is not None
+            and deck.rotor_stator_spacing_m > 0
+            and (deck.rpm is not None or deck.n1_percent is not None))
+        if complete:
+            assert deck is not None
+            bpf = deck.tip_speed_ms / (np.pi * deck.rotor_diameter_m) * deck.blade_count
+            base = (self.c + 10.0 * np.log10(deck.mass_flow_kg_s)
+                    + 20.0 * np.log10(deck.temperature_rise_k)
+                    - 3.0 * np.log10(
+                        1.0 + deck.rotor_stator_spacing_m / deck.rotor_diameter_m))
+            spec = _haystack(F_BANDS, self.f_scale * bpf, width=1.2)
+            tones = np.zeros_like(F_BANDS)
+            for harmonic, gain in ((1, 8.0), (2, 5.0), (3, 3.0)):
+                i = int(np.argmin(np.abs(np.log(
+                    F_BANDS / max(harmonic * bpf, 50.0)))))
+                tones[i] += gain
+            tip_mach = deck.tip_speed_ms / C0
+            buzz = np.zeros_like(F_BANDS)
+            if tip_mach >= 1.0:
+                buzz[F_BANDS < bpf] = 3.0 * min(tip_mach - 1.0, 0.5) / 0.5
+            inlet_dir = _interp_dir(
+                theta_deg, self.THETA,
+                np.array([3., 4., 3., 0., -4., -7., -10., -12., -14.]))
+            discharge_dir = _interp_dir(
+                theta_deg, self.THETA,
+                np.array([-14., -12., -9., -6., -3., 0., 3., 4., 3.]))
+            return {
+                "fan_inlet": base + inlet_dir + spec + tones + buzz,
+                "fan_discharge": base - 2.0 + discharge_dir + spec + tones,
+            }, InputStatus(
+                deck.status, deck.status == "supplied",
+                "Heidmann engine-deck path; BPF harmonics enabled"
+                + ("; buzz-saw eligible" if tip_mach >= 1.0 else "")
+                + ("; estimated inputs are not engine-deck-equivalent"
+                   if deck.status == "estimated" else ""))
+        return {}, InputStatus(
+            "estimated", False,
+            "Heidmann path unavailable: mass flow, temperature rise, tip "
+            "speed/RPM or N1, blade/stator counts, and rotor-stator spacing required")
+
+    def spectrum_with_diagnostics(self, st: EngineState, theta_deg):
+        pieces, status = self.component_spectra_with_diagnostics(st, theta_deg)
+        if pieces:
+            stack = np.stack(list(pieces.values()))
+            return (10.0 * np.log10(
+                np.sum(10.0 ** (stack / 10.0), axis=0)), status)
         base = (self.c
                 + 10.0 * np.log10(max(st.mdot, 1e-3))
                 + 40.0 * np.log10(max(st.m_tip, 0.05))
@@ -223,7 +636,11 @@ class FanSource:
         tone = np.zeros_like(F_BANDS)
         i = int(np.argmin(np.abs(np.log(F_BANDS / max(st.bpf_hz, 50.0)))))
         tone[i] = 8.0
-        return base + spec + tone
+        return (base + spec + tone,
+                InputStatus("estimated", False, "simplified fan-cycle fallback"))
+
+    def band_spl_1m(self, st: EngineState, theta_deg):
+        return self.spectrum_with_diagnostics(st, theta_deg)[0]
 
 
 class AirframeSource:
@@ -243,7 +660,13 @@ class AirframeSource:
         s = np.sin(np.radians(theta_deg))
         return 10.0 * np.log10(s * s + 0.05)
 
-    def band_spl_1m(self, v_ms, config, theta_deg):
+    def component_spectra_1m(self, v_ms, config, theta_deg):
+        """Six separately inspectable Fink-style spectra.
+
+        Missing/deployed components are represented by omission, rather than a
+        fabricated silent spectrum; callers can therefore report unavailable
+        inputs honestly.
+        """
         """config: dict(wing_area_m2, span_m, flap_area_m2, flap_deg,
         gear_down, n_wheels, wheel_d_m, slats_out)."""
         V = max(v_ms, 20.0)
@@ -251,13 +674,17 @@ class AirframeSource:
         c_bar = S / b
         re = RHO0 * V * c_bar / 1.79e-5
         dstar = 0.37 * c_bar * re ** -0.2
-        out = []
+        out = {}
         # wing (+ slat increment when deployed)
         lw = (self.cw + 50.0 * np.log10(V / C0)
               + 10.0 * np.log10(dstar * b) + self._dipole(theta_deg))
         f_w = self.f_scale * 0.1 * V / max(dstar, 1e-3)
-        wing = lw + _haystack(F_BANDS, f_w, 1.5) + (3.0 if config.get('slats_out') else 0.0)
-        out.append(wing)
+        wing = lw + _haystack(F_BANDS, f_w, 1.5)
+        out['wing_trailing_edge'] = wing
+        if config.get('slats_out'):
+            slat_chord = config.get('slat_chord_m', 0.12 * c_bar)
+            f_s = self.f_scale * 0.2 * V / max(slat_chord, 0.05)
+            out['slat'] = (lw + _haystack(F_BANDS, f_s, 1.35))
         # flap
         if config.get('flap_deg', 0.0) > 1.0:
             sf = config.get('flap_area_m2', 0.17 * S)
@@ -265,16 +692,45 @@ class AirframeSource:
                   + 10.0 * np.log10(sf * np.sin(np.radians(config['flap_deg'])) ** 2)
                   + self._dipole(theta_deg))
             f_f = self.f_scale * 0.6 * V / max(0.3 * c_bar, 0.2)
-            out.append(lf + _haystack(F_BANDS, f_f, 1.2))
+            flap_total = lf + _haystack(F_BANDS, f_f, 1.2)
+            # Main-edge and two side-edge virtual sources split the legacy
+            # flap intensity 75/25 while retaining distinct spectral peaks.
+            out['flap_main_edge'] = flap_total + 10.0 * np.log10(.75)
+            out['flap_side_edge'] = (
+                lf + 10.0 * np.log10(.25)
+                + _haystack(F_BANDS, 1.8 * f_f, 1.0))
         # landing gear
         if config.get('gear_down'):
             n, d = config.get('n_wheels', 8), config.get('wheel_d_m', 1.1)
-            lg = (self.cg + 60.0 * np.log10(V / C0)
-                  + 10.0 * np.log10(n * d * d))          # ~omnidirectional
-            f_g = self.f_scale * 0.8 * V / d
-            out.append(lg + _haystack(F_BANDS, f_g, 1.0))
-        # energetic sum of the airframe groups
-        stack = np.stack(out, axis=0)
+            lg = self.cg + 60.0 * np.log10(V / C0)       # ~omnidirectional
+            main_n = config.get('main_wheel_count', max(n - 2, 1))
+            nose_n = config.get('nose_wheel_count', min(2, n))
+            main_d = config.get('main_wheel_d_m', d)
+            nose_d = config.get('nose_wheel_d_m', .7 * d)
+            main_strut = config.get(
+                'main_strut_d_m', config.get('strut_d_m', .12 * main_d))
+            nose_strut = config.get(
+                'nose_strut_d_m', config.get('strut_d_m', .12 * nose_d))
+            main_gain = 10.0 * np.log10(
+                1.0 + max(main_strut, 0.0) ** 2
+                / max(main_d * main_d, 1e-6))
+            nose_gain = 10.0 * np.log10(
+                1.0 + max(nose_strut, 0.0) ** 2
+                / max(nose_d * nose_d, 1e-6))
+            out['main_landing_gear'] = (
+                lg + 10.0 * np.log10(main_n * main_d * main_d)
+                + main_gain
+                + _haystack(F_BANDS, self.f_scale * .8 * V / main_d, 1.0))
+            out['nose_landing_gear'] = (
+                lg + 10.0 * np.log10(nose_n * nose_d * nose_d)
+                + nose_gain
+                + _haystack(
+                    F_BANDS, 1.25 * self.f_scale * .8 * V / nose_d, 1.0))
+        return out
+
+    def band_spl_1m(self, v_ms, config, theta_deg):
+        spectra = self.component_spectra_1m(v_ms, config, theta_deg)
+        stack = np.stack(list(spectra.values()), axis=0)
         return 10.0 * np.log10(np.sum(10.0 ** (stack / 10.0), axis=0))
 
 
@@ -329,46 +785,403 @@ class PhysicsDesign:
     def __init__(self, name, n_engines, max_thrust_per_engine_lbf, bpr,
                  mtow_lb, wing_area_m2=None, span_m=None,
                  fan_diameter_m=None, n_fan_blades=24,
-                 n_wheels=None, wheel_d_m=1.1):
+                 n_wheels=None, wheel_d_m=1.1, *,
+                 jet_streams: tuple[JetStream, ...] = (),
+                 fan_deck: FanDeck | None = None,
+                 core_stream: CoreStream | None = None,
+                 airframe_geometry: AirframeGeometry | None = None,
+                 engine_physical_inputs: EnginePhysicalInputs | None = None,
+                 airframe_physical_inputs: AirframePhysicalInputs | None = None,
+                 atmospheric_inputs: AtmosphericPhysicalInputs | None = None,
+                 input_status: Mapping[str, InputStatus] | None = None):
         self.name = name
         self.n_engines = int(n_engines)
         self.fmax_n = max_thrust_per_engine_lbf * LBF2N
-        self.bpr = float(bpr)
+        self.engine_physical_inputs = engine_physical_inputs
+        self.airframe_physical_inputs = airframe_physical_inputs
+        self.atmospheric_inputs = atmospheric_inputs
+        self.bpr = float(
+            engine_physical_inputs.bypass_ratio.or_value(bpr)
+            if engine_physical_inputs is not None else bpr)
         mtow_kg = mtow_lb * 0.453592
         # geometry defaults from weight when a synthesis tool hasn't
         # supplied them: wing loading ~600 kg/m^2, aspect ratio 9
         self.wing_area_m2 = wing_area_m2 or mtow_kg / 600.0
         self.span_m = span_m or np.sqrt(9.0 * self.wing_area_m2)
-        self.fan_diameter_m = fan_diameter_m
-        self.n_fan_blades = n_fan_blades
+        self.fan_diameter_m = (
+            engine_physical_inputs.fan_diameter_m.or_value(fan_diameter_m)
+            if engine_physical_inputs is not None else fan_diameter_m)
+        self.n_fan_blades = int(
+            engine_physical_inputs.blade_count.or_value(n_fan_blades)
+            if engine_physical_inputs is not None else n_fan_blades)
         self.n_wheels = n_wheels or (4 if mtow_kg < 5e4 else
                                      8 if mtow_kg < 2e5 else 12)
         self.wheel_d_m = wheel_d_m
+        self.jet_streams = tuple(jet_streams)
+        if fan_deck is None and engine_physical_inputs is not None:
+            ep = engine_physical_inputs
+            fan_fields = (
+                ep.mass_flow_kg_s, ep.fan_diameter_m, ep.rpm,
+                ep.blade_count, ep.stator_count, ep.rotor_stator_spacing_m,
+                ep.fan_temperature_rise_k)
+            if all(item.available for item in fan_fields):
+                diameter = float(ep.fan_diameter_m.value)
+                rpm = float(ep.rpm.value)
+                fan_status = (
+                    "supplied" if all(item.status == "supplied"
+                                      for item in fan_fields)
+                    else "estimated")
+                fan_deck = FanDeck(
+                    float(ep.mass_flow_kg_s.value),
+                    np.pi * diameter * rpm / 60.0,
+                    int(ep.blade_count.value), diameter,
+                    float(ep.fan_temperature_rise_k.value), rpm= rpm,
+                    n1_percent=(float(ep.n1_percent.value)
+                                if ep.n1_percent.available else None),
+                    stator_count=int(ep.stator_count.value),
+                    rotor_stator_spacing_m=float(
+                        ep.rotor_stator_spacing_m.value),
+                    status=fan_status)
+        self.fan_deck = fan_deck
+
+        if core_stream is None and engine_physical_inputs is not None:
+            ep = engine_physical_inputs
+            core_fields = (
+                ep.core_mass_flow_kg_s, ep.nozzle_exit_velocity_ms,
+                ep.nozzle_exit_area_m2, ep.nozzle_exit_temperature_k,
+                ep.nozzle_exit_pressure_pa,
+                ep.combustor_exit_temperature_k,
+                ep.turbine_attenuation_db)
+            if all(item.available for item in core_fields):
+                core_status = (
+                    "supplied" if all(item.status == "supplied"
+                                      for item in core_fields)
+                    else "estimated")
+                core_stream = CoreStream(
+                    float(ep.nozzle_exit_velocity_ms.value),
+                    float(ep.core_mass_flow_kg_s.value),
+                    np.sqrt(4.0 * float(ep.nozzle_exit_area_m2.value) / np.pi),
+                    float(ep.nozzle_exit_temperature_k.value),
+                    combustor_exit_temperature_k=float(
+                        ep.combustor_exit_temperature_k.value),
+                    total_pressure_pa=float(ep.nozzle_exit_pressure_pa.value),
+                    turbine_attenuation_db=float(
+                        ep.turbine_attenuation_db.value),
+                    status=core_status)
+        self.core_stream = core_stream
+        self.airframe_geometry = airframe_geometry
+        core_complete = (
+            core_stream is not None
+            and core_stream.combustor_exit_temperature_k is not None
+            and core_stream.total_pressure_pa is not None
+            and core_stream.turbine_attenuation_db is not None
+            and min(core_stream.velocity_ms, core_stream.mass_flow_kg_s,
+                    core_stream.diameter_m, core_stream.temperature_k) > 0)
+        defaults = {
+            "thrust": InputStatus("supplied", True, "PhysicsDesign input"),
+            "bypass_ratio": InputStatus("supplied", True, "PhysicsDesign input"),
+            "wing_area_m2": InputStatus(
+                "supplied" if wing_area_m2 is not None else "estimated",
+                wing_area_m2 is not None,
+                "supplied geometry" if wing_area_m2 is not None
+                else "estimated from 600 kg/m2 wing loading"),
+            "span_m": InputStatus(
+                "supplied" if span_m is not None else "estimated",
+                span_m is not None,
+                "supplied geometry" if span_m is not None
+                else "estimated with aspect ratio 9"),
+            "jet_streams": InputStatus(
+                "supplied" if jet_streams else "unavailable",
+                bool(jet_streams), "engine-deck stream data"),
+            "fan_deck": InputStatus(
+                "supplied" if fan_deck is not None else "unavailable",
+                fan_deck is not None, "engine-deck fan data"),
+            "core_combustor": InputStatus(
+                (core_stream.status if core_complete else "unavailable"),
+                core_complete,
+                "complete core source data" if core_complete
+                else "core disabled until all required fields are available"),
+        }
+        if engine_physical_inputs is not None:
+            for name, value in vars(engine_physical_inputs).items():
+                defaults[name] = InputStatus(
+                    value.status, value.available,
+                    value.note or "typed engine physical input")
+        if airframe_physical_inputs is not None:
+            for name, value in vars(airframe_physical_inputs).items():
+                defaults[f"airframe.{name}"] = InputStatus(
+                    value.status, value.available,
+                    value.note or "typed airframe physical input")
+        if atmospheric_inputs is not None:
+            for name, value in (
+                    ("temperature_c", atmospheric_inputs.temperature_c),
+                    ("relative_humidity_percent",
+                     atmospheric_inputs.relative_humidity_percent),
+                    ("pressure_kpa", atmospheric_inputs.pressure_kpa)):
+                defaults[name] = InputStatus(
+                    value.status, value.available,
+                    value.note or "typed atmospheric input")
+        defaults.update(input_status or {})
+        self.input_status = defaults
 
     def config(self, op_mode):
         """Configuration state per operational mode (ANP convention:
         departure = gear up + takeoff flap; approach = landing flap + gear)."""
         if op_mode == 'D':
-            return dict(wing_area_m2=self.wing_area_m2, span_m=self.span_m,
+            base = dict(wing_area_m2=self.wing_area_m2, span_m=self.span_m,
                         flap_area_m2=0.17 * self.wing_area_m2, flap_deg=10.0,
                         gear_down=False, slats_out=True,
                         n_wheels=self.n_wheels, wheel_d_m=self.wheel_d_m)
-        return dict(wing_area_m2=self.wing_area_m2, span_m=self.span_m,
+        else:
+            base = dict(wing_area_m2=self.wing_area_m2, span_m=self.span_m,
                     flap_area_m2=0.17 * self.wing_area_m2, flap_deg=30.0,
                     gear_down=True, slats_out=True,
                     n_wheels=self.n_wheels, wheel_d_m=self.wheel_d_m)
+        geom = self.airframe_geometry
+        if geom is not None:
+            values = {"wing_area_m2": geom.wing_area_m2, "span_m": geom.span_m,
+                      "flap_area_m2": geom.flap_area_m2, "flap_deg": geom.flap_deg,
+                      "slats_out": geom.slats_out, "gear_down": geom.gear_down,
+                      "slat_chord_m": geom.slat_chord_m,
+                      "slat_deg": geom.slat_deg,
+                      "wheel_d_m": geom.wheel_diameter_m,
+                      "strut_d_m": geom.strut_diameter_m,
+                      "nose_wheel_count": geom.nose_wheel_count,
+                      "main_wheel_count": geom.main_wheel_count}
+            base.update({k: v for k, v in values.items() if v is not None})
+        physical = self.airframe_physical_inputs
+        if physical is not None:
+            typed_values = {
+                "wing_area_m2": physical.wing_area_m2,
+                "span_m": physical.wing_span_m,
+                "flap_area_m2": physical.flap_area_m2,
+                "flap_chord_m": physical.flap_chord_m,
+                "flap_deg": physical.flap_deflection_deg,
+                "slat_area_m2": physical.slat_area_m2,
+                "slat_chord_m": physical.slat_chord_m,
+                "slat_deg": physical.slat_deflection_deg,
+                "nose_wheel_count": physical.nose_wheel_count,
+                "nose_wheel_d_m": physical.nose_wheel_diameter_m,
+                "nose_strut_d_m": physical.nose_strut_diameter_m,
+                "main_wheel_count": physical.main_wheel_count,
+                "main_wheel_d_m": physical.main_wheel_diameter_m,
+                "main_strut_d_m": physical.main_strut_diameter_m,
+                "gear_down": physical.gear_down,
+            }
+            base.update({
+                key: value.value for key, value in typed_values.items()
+                if value.available
+            })
+            # Legacy airframe formulas accept one representative wheel/strut
+            # diameter; detailed nose/main values remain separately visible.
+            if physical.main_wheel_diameter_m.available:
+                base["wheel_d_m"] = physical.main_wheel_diameter_m.value
+            if physical.main_strut_diameter_m.available:
+                base["strut_d_m"] = physical.main_strut_diameter_m.value
+        return base
+
+
+@dataclass(frozen=True)
+class EventDiagnostics:
+    """Inspectability record for one event; levels are A-weighted dB."""
+    lamax_db: float
+    sel_db: float
+    time_s: np.ndarray
+    total_time_history_db: np.ndarray
+    component_time_histories_db: Mapping[str, np.ndarray]
+    component_metrics_db: Mapping[str, Mapping[str, float]]
+    source_status: Mapping[str, InputStatus]
+    input_status: Mapping[str, InputStatus]
+    excluded_effects: tuple[str, ...] = (
+        "installation_shielding", "nacelle_treatment", "ground_reflection",
+        "lateral_attenuation", "terrain", "non_uniform_atmosphere",
+    )
+    uncertainty_note: str = (
+        "Component anchor/model-form uncertainty is not a calibrated interval; "
+        "learned-model tree dispersion is not physics uncertainty.")
 
 
 class PhysicsNPDModel:
     SUPPORTED_METRICS = ("SEL", "LAmax")
 
-    def __init__(self, c_jet=140.0, c_fan=55.0, c_wingflap=35.0, c_gear=25.0):
+    def __init__(self, c_jet=140.0, c_fan=55.0, c_wingflap=35.0, c_gear=25.0,
+                 atmosphere: Atmosphere | None = None,
+                 flight_path: FlightStateSource | None = None):
         self.jet = JetSource(c_jet)
         self.fan = FanSource(c_fan)
         self.airframe = AirframeSource(c_wingflap, c_gear)
         self._aw = a_weighting()
-        self._alpha = atmospheric_absorption()
+        self.atmosphere = atmosphere or Atmosphere()
+        self._alpha = atmospheric_absorption(temp_c=self.atmosphere.temperature_c,
+                                            rel_hum=self.atmosphere.relative_humidity_percent,
+                                            pressure_kpa=self.atmosphere.pressure_kpa)
+        self.flight_path = flight_path or Reference160KtFlightPath()
         self._theta = np.linspace(5.0, 175.0, 69)          # emission angles
+
+    @staticmethod
+    def _sum_spectra(spectra):
+        stack = np.stack(list(spectra), axis=0)
+        return 10.0 * np.log10(np.sum(10.0 ** (stack / 10.0), axis=0))
+
+    def _atmosphere_for_design(self, design: PhysicsDesign) -> Atmosphere:
+        inputs = design.atmospheric_inputs
+        if inputs is None:
+            return self.atmosphere
+        return Atmosphere(
+            float(inputs.temperature_c.or_value(
+                self.atmosphere.temperature_c)),
+            float(inputs.relative_humidity_percent.or_value(
+                self.atmosphere.relative_humidity_percent)),
+            float(inputs.pressure_kpa.or_value(
+                self.atmosphere.pressure_kpa)))
+
+    def evaluate_sources(self, design: PhysicsDesign, engine: EngineState,
+                         config, state: FlightState):
+        """Evaluate all enabled sources for one instantaneous flight state."""
+        bands = {}
+        statuses = {}
+
+        jet_parts, jet_status = self.jet.component_spectra_with_diagnostics(
+            engine, state.emission_angle_deg)
+        if jet_parts:
+            bands.update(jet_parts)
+        else:
+            bands["jet"], jet_status = self.jet.spectrum_with_diagnostics(
+                engine, state.emission_angle_deg)
+        statuses["jet"] = jet_status
+
+        fan_parts, fan_status = self.fan.component_spectra_with_diagnostics(
+            engine, state.emission_angle_deg)
+        if fan_parts:
+            bands.update(fan_parts)
+        else:
+            bands["fan"], fan_status = self.fan.spectrum_with_diagnostics(
+                engine, state.emission_angle_deg)
+        statuses["fan"] = fan_status
+
+        core, core_status = self.jet.core_spectrum_1m(
+            engine, state.emission_angle_deg)
+        if core is not None:
+            bands["core_combustor"] = core
+        statuses["core_combustor"] = core_status
+
+        bands.update(self.airframe.component_spectra_1m(
+            state.true_airspeed_ms, config, state.emission_angle_deg))
+        has_typed_airframe = design.airframe_physical_inputs is not None
+        typed_airframe_supplied = (
+            has_typed_airframe
+            and all(value.available and value.status == "supplied"
+                    for value in vars(design.airframe_physical_inputs).values())
+        )
+        explicit_airframe = (
+            design.airframe_geometry is not None or has_typed_airframe)
+        supplied_airframe = (
+            typed_airframe_supplied or design.airframe_geometry is not None)
+        statuses["airframe"] = InputStatus(
+            "supplied" if supplied_airframe else "estimated",
+            bool(supplied_airframe),
+            ("typed supplied airframe geometry"
+             if typed_airframe_supplied else
+             "typed concept-stage geometry"
+             if has_typed_airframe else
+             "explicit airframe geometry"
+             if explicit_airframe else
+             "legacy weight/configuration geometry fallback"))
+        return bands, statuses
+
+    @staticmethod
+    def _metric_pair(level_history, time_s):
+        lamax = float(np.max(level_history))
+        sel = float(10.0 * np.log10(np.trapezoid(
+            10.0 ** (level_history / 10.0), time_s)))
+        return {"LAmax": lamax, "SEL": sel}
+
+    @staticmethod
+    def _rollup_component_histories(component_histories):
+        groups = {
+            "jet": [k for k in component_histories if k.startswith("jet")],
+            "fan": [k for k in component_histories if k.startswith("fan")],
+            "airframe": [
+                k for k in component_histories
+                if k in {"wing_trailing_edge", "slat", "flap_main_edge",
+                         "flap_side_edge", "nose_landing_gear",
+                         "main_landing_gear"}],
+        }
+        out = {}
+        for group, names in groups.items():
+            if names:
+                stack = np.stack([component_histories[n] for n in names])
+                out[group] = 10.0 * np.log10(
+                    np.sum(10.0 ** (stack / 10.0), axis=0))
+        return out
+
+    def single_event_diagnostics(self, design: PhysicsDesign,
+                                 thrust_per_engine_lbf, op_mode,
+                                 distance_ft) -> EventDiagnostics:
+        """Simulate a reference event and retain source/time-history evidence."""
+        d = float(distance_ft) * FT2M
+        engine = EngineState.from_design(
+            thrust_per_engine_lbf * LBF2N, design.fmax_n, design.bpr,
+            design.fan_diameter_m, design.n_fan_blades,
+            design.jet_streams, design.fan_deck, design.core_stream,
+            design.engine_physical_inputs)
+        config = design.config(op_mode)
+        event_atmosphere = self._atmosphere_for_design(design)
+        event_alpha = atmospheric_absorption(
+            temp_c=event_atmosphere.temperature_c,
+            rel_hum=event_atmosphere.relative_humidity_percent,
+            pressure_kpa=event_atmosphere.pressure_kpa)
+        theta = self._theta
+        ranges = d / np.sin(np.radians(theta))
+        x_positions = -d / np.tan(np.radians(theta))
+        states = [
+            self.flight_path.state(
+                x_m=float(x), closest_distance_m=d,
+                true_airspeed_ms=NPD_REF_SPEED_MS,
+                thrust_per_engine_n=engine.thrust_n,
+                configuration=config, atmosphere=event_atmosphere)
+            for x in x_positions
+        ]
+        time_s = np.array([s.time_s for s in states])
+        component_levels: dict[str, np.ndarray] = {}
+        source_status = {}
+        n_eng_db = 10.0 * np.log10(design.n_engines)
+
+        for i, (state, distance_m) in enumerate(zip(states, ranges)):
+            spectra, statuses = self.evaluate_sources(
+                design, engine, config, state)
+            source_status.update(statuses)
+            propagation = (
+                -20.0 * np.log10(distance_m)
+                - event_alpha * distance_m + self._aw)
+            for name, spectrum in spectra.items():
+                engine_source = (
+                    name.startswith("jet") or name.startswith("fan")
+                    or name == "core_combustor")
+                received = spectrum + propagation
+                if engine_source:
+                    received = received + n_eng_db
+                level = 10.0 * np.log10(
+                    np.sum(10.0 ** (received / 10.0)))
+                if name not in component_levels:
+                    component_levels[name] = np.full(len(states), -300.0)
+                component_levels[name][i] = level
+
+        stack = np.stack(list(component_levels.values()))
+        total = 10.0 * np.log10(
+            np.sum(10.0 ** (stack / 10.0), axis=0))
+        total_metrics = self._metric_pair(total, time_s)
+        metrics = {
+            name: self._metric_pair(history, time_s)
+            for name, history in component_levels.items()
+        }
+        rollups = self._rollup_component_histories(component_levels)
+        for name, history in rollups.items():
+            metrics[name] = self._metric_pair(history, time_s)
+        return EventDiagnostics(
+            total_metrics["LAmax"], total_metrics["SEL"], time_s, total,
+            component_levels, metrics, dict(source_status),
+            dict(design.input_status))
 
     # ---- single flyover event -------------------------------------------
     @overload
@@ -384,38 +1197,14 @@ class PhysicsNPDModel:
     def single_event(self, design: PhysicsDesign, thrust_per_engine_lbf,
                      op_mode, distance_ft, return_components=False):
         """Returns (LAmax, SEL) for one level flyover at closest distance d."""
-        d = distance_ft * FT2M
-        st = EngineState.from_design(thrust_per_engine_lbf * LBF2N,
-                                     design.fmax_n, design.bpr,
-                                     design.fan_diameter_m,
-                                     design.n_fan_blades)
-        cfg = design.config(op_mode)
-        v = NPD_REF_SPEED_MS
-        th = self._theta
-        r = d / np.sin(np.radians(th))                     # slant range [m]
-        x = -d / np.tan(np.radians(th))                    # along-track pos
-        t = x / v                                          # time [s]
-        n_eng_db = 10.0 * np.log10(design.n_engines)
-        la = np.empty_like(th)
-        comp_max = {}
-        for i, (ti, ri) in enumerate(zip(th, r)):
-            prop = -20.0 * np.log10(ri) - self._alpha * ri + self._aw
-            bands = {
-                'jet': self.jet.band_spl_1m(st, ti) + n_eng_db + prop,
-                'fan': self.fan.band_spl_1m(st, ti) + n_eng_db + prop,
-                'airframe': self.airframe.band_spl_1m(v, cfg, ti) + prop,
-            }
-            tot = 0.0
-            for k, b in bands.items():
-                lk = 10.0 * np.log10(np.sum(10.0 ** (b / 10.0)))
-                comp_max[k] = max(comp_max.get(k, -300.0), lk)
-                tot += 10.0 ** (lk / 10.0)
-            la[i] = 10.0 * np.log10(tot)
-        lamax = float(la.max())
-        sel = float(10.0 * np.log10(np.trapezoid(10.0 ** (la / 10.0), t)))
+        diagnostics = self.single_event_diagnostics(
+            design, thrust_per_engine_lbf, op_mode, distance_ft)
         if return_components:
-            return lamax, sel, comp_max
-        return lamax, sel
+            component_lamax = {
+                name: values["LAmax"]
+                for name, values in diagnostics.component_metrics_db.items()}
+            return diagnostics.lamax_db, diagnostics.sel_db, component_lamax
+        return diagnostics.lamax_db, diagnostics.sel_db
 
     # ---- NPD table emission ---------------------------------------------
     def predict_table(self, design: PhysicsDesign, metric, op_mode,

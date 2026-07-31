@@ -1,0 +1,13 @@
+PNMF QUICK START (WINDOWS)
+
+1. py -3 -m venv .venv
+2. .venv\Scripts\python.exe -m pip install -r requirements.txt
+3. .venv\Scripts\python.exe pnmf_cli.py datastore
+4. .venv\Scripts\python.exe pnmf_cli.py manifest
+5. .venv\Scripts\python.exe -m pytest tests -q
+
+Supported learned models: et (default), rf.
+Independent component physics: .\pnmf.ps1 physics (SEL/LAmax only).
+UI: .\pnmf.ps1 ui
+
+The runner and Python entry points are independent of caller working directory.

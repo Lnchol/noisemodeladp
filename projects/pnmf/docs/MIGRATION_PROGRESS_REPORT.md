@@ -46,10 +46,12 @@ EPNL/A 5.05, LAmax/D 5.04, LAmax/A 4.57, PNLTM/D 5.36, and PNLTM/A 5.25 dB.
 Physics fleet median RMSE was 2.82 dB. These are baselines, not claims for the
 new 122-set corpus.
 
-## Remaining research gaps
+## Research gaps after migration
 
-- Re-run and interpret the full eight-combination ET/RF validation on the
-  expanded corpus.
+- The full eight-combination ET/RF validation on the expanded corpus is
+  complete and recorded in `MODEL_TRAINING_REPORT.md`; the remaining evidence
+  gap is a curated aircraft-family split and prospectively frozen external
+  NPD set.
 - Reassess the frozen physics constants only through a separately approved
   calibration study.
 - Add physically justified EPNL/PNLTM tone/duration modeling if that route is
@@ -66,5 +68,8 @@ new 122-set corpus.
   for extrapolation uncertainty. Physics disagreement was 3.23 dB SEL and
   2.27 dB LAmax.
 
-The independent validation lane must still run the full acceptance commands and
-record expanded-corpus ET/RF LOO deltas before new accuracy claims are made.
+The migration acceptance work was subsequently completed. Use
+`MODEL_TRAINING_REPORT.md` and `JET_REFERENCE_VALIDATION_REPORT.md` for current
+learned-model evidence, and
+`PNMF_COMPONENT_PHYSICS_TECHNICAL_PAPER.pdf` for the current physics
+architecture and its separate validation gaps.

@@ -22,9 +22,11 @@ Supported learned models are Extra Trees (`et`, default) and Random Forest
 (`rf`). Historical regression experiments remain internal for reproducibility
 but are retired from the API, CLI, and UI.
 
-`PhysicsNPDModel` is a separate component-source calculation using jet, fan,
-airframe, and propagation models. It is not a regression model. It supports
-SEL/LAmax and requires explicit BPR/component assumptions.
+`PhysicsNPDModel` is a separate component-source calculation using gated jet,
+fan and optional core branches, six airframe sources, and free-field
+propagation. It is not a regression model. It supports SEL/LAmax. Explicit
+physical inputs are preferred; missing detailed inputs activate visible
+low-fidelity fallbacks.
 
 ET/RF success is measured with leave-one-aircraft-out validation. Physics is
 calibrated once on A320-211 and evaluated out of sample. Every generated table

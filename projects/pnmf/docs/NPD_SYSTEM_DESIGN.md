@@ -1,18 +1,19 @@
 # PNMF — NPD System Design Reference
 
-> Core formulas and invariants remain authoritative. Semi-empirical,
-> anchor/blend, and evolve/champion sections are historical; the supported
+> Core formulas and invariants are implementation-grounded. The supported
 > learned models are exactly ET and RF. Component physics is the separate
 > `PhysicsNPDModel` workflow.
 
 **Parametric Noise Modeling Framework** · TU Darmstadt / FSR Advanced Design
 Project (Prof. Klingauf, supervised by L. Kempf)
 
-*This is the system design reference: the full API surface and every formula
-and assumption in the framework, grounded in the code as of 2026-07-14.
+*This is the system design reference: the current public API surface, formulas
+and assumptions, grounded in the code as of 2026-07-28.
 Companion documents: `README.md` (narrative, fault log, validation writeup),
 `docs/HOW_IT_WORKS.md` (plain-language walkthrough),
-`docs/FINAL_REPORT.md` (results and reproduction record).*
+`docs/MODEL_TRAINING_REPORT.md` (current learned-model evidence), and
+`docs/PNMF_COMPONENT_PHYSICS_TECHNICAL_PAPER.pdf` (physics equations,
+architecture and research gaps).*
 
 ---
 
@@ -215,50 +216,29 @@ improvement from this fix: SEL/A RMSE 4.82 → 4.23 dB.
   (`IsotonicRegression(increasing=False)` on log10 distance). Rows already
   monotone are unchanged. On by default in every model.
 - **Uncertainty:** `predict_table(..., return_std=True)` returns a `(P, 10)`
-  array of **cross-tree standard deviations** (std over the RandomForest's
-  individual tree predictions) — a cheap stand-in for GP variance. Queries
+  array of **cross-tree standard deviations** over the selected ET or RF
+  ensemble. It is an uncalibrated disagreement heuristic, not a prediction
+  interval. Queries
   far from the training population show systematically wider spread, which
-  is how extrapolation is flagged to the QA gate (§8). Only meaningful for
-  the native multi-output RF; other learners return NaN.
+  is how extrapolation can be flagged to the QA gate (§8).
 
 ### 5.3 The model family
 
-All models share the interface `.fit(db, metric, op_mode, exclude_ids=())`,
+The two supported models share the interface
+`.fit(db, metric, op_mode, exclude_ids=())`,
 `.fit_all(db, metrics, op_modes)`, `.predict_table(aircraft, metric,
 op_mode, power_settings, power_parameter=...)`:
 
-- **`SurrogateNPDModel(learner="rf")`** — RandomForest (200 trees,
-  `min_samples_leaf=2`) or gradient boosting (`"gbr"`,
-  `MultiOutputRegressor`-wrapped). The production route.
-- **`SemiEmpiricalNPDModel`** — interpretable decomposition
-  `L(P, d) = L_anchor(params) + s_thrust · log10(P / P_ref) + decay(d)`:
-  a Ridge regression of the level at 1000 ft and reference (max tabulated)
-  power on 6 features; a per-engine-type mean decay shape relative to the
-  1000 ft column (the data show ≈ −21 dB/decade for jets, consistent with
-  spherical spreading + absorption); a per-engine-type least-squares thrust
-  slope. Unit-invariant by construction (only the ratio P/P_ref enters).
-- **`AnchorDeltaNPDModel`** — substitution-style: anchor on the nearest
-  donor's ACTUAL ANP curve (nearest in standardized feature space, +3.0
-  penalty when the engine type differs), evaluated at the query's
-  unit-corrected throttle fraction, plus a RandomForest correction trained
-  on residuals (target − donor) vs the feature difference and power state.
-  Its `return_std` is the cross-tree std of the *correction* only.
-- **`BlendNPDModel(weight=0.5)`** — convex combination of the RF surrogate
-  and the semi-empirical outputs, `L = w·L_rf + (1−w)·L_semiemp`; the
-  components are fit independently, so the blend adds no coupling.
-- **`EvolvedSurrogateModel(config)`** (`pnmf/evolve.py`) — a
-  `SurrogateNPDModel` driven by an evolved configuration: learner ∈ {rf,
-  ExtraTrees, gbr}, tree hyperparameters, and optional derived features
-  (thrust-to-weight = log total thrust − log MTOW; power loading = log row
-  power − log MTOW) appended transparently at fit and predict time.
-  `champion(db_path)` returns the best configuration in the persistent
-  `model_trials` registry; `champion_surrogate(db_path)` builds it ready to
-  fit. `improve(db_path, trials)` runs one search session — half mutations
-  of the champion, half experience-biased exploration, each scored by
-  GroupKFold CV on the real fleet, with a cheap two-stage screen (SEL:D +
-  SEL:A, 3 folds, 0.35 dB margin) before full evaluation. The registry is
-  cumulative: nothing is re-evaluated and the champion score only improves
-  (4.693 → 4.686 dB CV-RMSE at last verification).
+- **`SurrogateNPDModel(learner="et")`** — Extra Trees with 500 trees,
+  `min_samples_leaf=1`, `max_depth=24`, and `max_features=0.5`. This is the
+  production default.
+- **`SurrogateNPDModel(learner="rf")`** — Random Forest with 200 trees and
+  `min_samples_leaf=2`. This is the supported comparison model.
+
+Historical semi-empirical, anchor, blend, ARIMA, gradient-boosting and
+evolution experiments remain in source history or internal modules for
+reproducibility. They are not accepted by the public API, CLI, or UI and must
+not be described as current model choices.
 
 ### 5.4 LOO harness
 
@@ -290,10 +270,38 @@ the ANP reference airspeed is 160 kt.
   attenuation and installation are deliberately excluded — NPD tables are
   defined for this idealised geometry; the consumer tool applies the rest.
 
-### 6.2 Engine-cycle state (`EngineState.from_design`)
+### 6.2 Physical-input and flight-state contracts
+
+The component route exposes typed SI contracts before source evaluation:
+
+- `PhysicalInput[T]` carries the value and the literal evidence state
+  `supplied`, `estimated`, or `unavailable`. `EnginePhysicalInputs` covers
+  thrust, BPR, flow, nozzle exit area/velocity/temperature/pressure, fan
+  diameter, RPM/N1, blade/stator counts, rotor-stator spacing, fan temperature
+  rise, and core/combustor state. `AirframePhysicalInputs` covers wing,
+  flap/slat, wheel, and strut geometry/configuration.
+  `AtmosphericPhysicalInputs` and `FlightTrajectoryInputs` cover temperature,
+  humidity, pressure, position, TAS/Mach, altitude, attitude, thrust, and
+  configuration.
+- The legacy `PhysicsDesign` constructor remains valid. Its
+  `input_status` diagnostics mark direct constructor quantities as supplied,
+  weight-derived wing geometry as estimated, and absent engine-deck/core data
+  as unavailable. Typed nozzle quantities override the low-fidelity
+  mixed-nozzle state; a complete typed fan set creates the Heidmann input
+  deck; typed airframe geometry drives the six airframe components; and typed
+  atmosphere values are used for that event's absorption. Estimates are never
+  promoted silently to supplied data.
+- `FlightStateSource` is the instantaneous source-evaluation boundary.
+  `Reference160KtFlightPath` adapts the existing Doc-29 NPD event to that
+  interface. `FlightTrajectoryInputs.to_flight_state()` validates a complete
+  trajectory sample before converting it to this boundary. The reference
+  adapter is a steady, level 160 kt flyover; it is not an airport trajectory
+  or contour model.
+
+### 6.3 Legacy low-fidelity engine state (`EngineState.from_design`)
 
 A deliberately simple, documented mapping from (thrust setting, design) to
-gas-path quantities, all overridable:
+gas-path quantities:
 
 - `v_jet_max = 700 / (1+BPR)^0.44` m/s (anchored on JT8D and CFM56;
   reproduces GE90 ≈ 260 m/s); fixed nozzle ⇒ `v_j = v_max·sqrt(F/Fmax)`;
@@ -303,7 +311,11 @@ gas-path quantities, all overridable:
 - blade-passing frequency `BPF = M_tip·c₀/(π·D_fan)·n_blades` (24 blades
   default); `D_fan` from max mass flow at a Mach-0.45 fan face unless given.
 
-### 6.3 Component sources (exponents as implemented)
+These quantities are an **estimated low-fidelity fallback**, not an engine
+deck. The event diagnostics report that fallback whenever the detailed Stone
+or Heidmann gates are not satisfied.
+
+### 6.4 Component sources (exponents as implemented)
 
 Each source returns 1/3-octave SPL at a 1 m reference radius for one engine
 (or the whole airframe). Spectra are smooth "haystack" humps, parabolic in
@@ -312,11 +324,14 @@ angle θ.
 
 | source | level law (dB) | spectrum peak |
 |---|---|---|
-| Jet (Stone/Lighthill) | `C_jet + 80·log10(v_jet/c₀) + 10·log10(A_jet)` + aft-dominant directivity — i.e. intensity ∝ V_j⁸·A_j | Strouhal ≈ 0.25: `f_peak = f_scale·0.25·v_jet/d_jet` |
-| Fan (Heidmann form) | `C_fan + 10·log10(mdot) + 40·log10(M_tip)` + two-lobe (inlet/discharge) directivity — Euler work ΔTt ∝ U_tip² ⇒ 20·log10(ΔTt) = 40·log10(M_tip) | haystack around BPF + a +8 dB tone in the BPF band |
-| Airframe, wing/slat TE (Fink) | `C_wingflap + 50·log10(V/c₀) + 10·log10(δ*·b)` with `δ* = 0.37·c̄·Re^−0.2` (+3 dB with slats out); dipole directivity `10·log10(sin²θ + 0.05)` | `f ≈ 0.1·V/δ*` |
-| Airframe, flap | `C_wingflap + 3 + 50·log10(V/c₀) + 10·log10(S_f·sin²δ_f)` (S_f defaults to 0.17·S) | `f ≈ 0.6·V/(0.3·c̄)` |
-| Airframe, landing gear | `C_gear + 60·log10(V/c₀) + 10·log10(n_wheels·d_w²)`, ≈ omnidirectional | `f ≈ 0.8·V/d_w` |
+| simplified mixed jet fallback | `C_jet + 80·log10(v_jet/c₀) + 10·log10(A_jet)` + aft-dominant directivity — intensity ∝ `V_j⁸·A_j` | Strouhal ≈ 0.25: `f_peak = f_scale·0.25·v_jet/d_jet` |
+| Stone-style multi-stream jet | the same density-corrected `V⁸A` scaling is evaluated separately for outer, optional inner/intermediate, and merged virtual sources, each with its own peak and directivity offset; the spectra are summed energetically | enabled only with supplied outer **and** merged velocity, flow, diameter, temperature, and pressure; otherwise the simplified fallback is named in diagnostics |
+| simplified fan fallback | `C_fan + 10·log10(mdot) + 40·log10(M_tip)` + legacy two-lobe directivity | estimated haystack around BPF plus one BPF-band tone |
+| Heidmann-style engine-deck fan | `C_fan + 10·log10(mdot) + 20·log10(ΔTt)` with separate inlet/discharge lobes and a rotor-stator-spacing adjustment | requires mass flow, temperature rise, tip speed plus RPM or N1, diameter, blade/stator counts, and rotor-stator spacing; supplies BPF harmonics 1–3 and buzz-saw eligibility only for tip Mach ≥ 1 |
+| Fink-style wing trailing edge | `C_wingflap + 50·log10(V/c₀) + 10·log10(δ*·b)`, `δ* = 0.37·c̄·Re^−0.2`; dipole directivity `10·log10(sin²θ + 0.05)` | `f ≈ 0.1·V/δ*` |
+| Fink-style slat | deployed slat uses an independently inspectable spectrum based on slat chord | `f ≈ 0.2·V/c_slat` |
+| Fink-style flap main/side edges | `C_wingflap + 3 + 50·log10(V/c₀) + 10·log10(S_f·sin²δ_f)`; the legacy flap energy is split 75/25 between main and side virtual sources | main `f ≈ 0.6·V/(0.3c̄)`; side peak is 1.8 times higher |
+| Fink-style nose/main landing gear | `C_gear + 60·log10(V/c₀) + 10·log10(n·d²)` with explicit nose/main wheel counts and a visible strut-geometry factor | `f ≈ 0.8·V/d`; nose peak is 1.25 times higher |
 
 `PhysicsDesign` holds the configuration; when a synthesis tool has not
 supplied geometry, defaults are derived from weight (wing loading
@@ -324,7 +339,11 @@ supplied geometry, defaults are derived from weight (wing loading
 configuration convention is built in: departure = gear up, 10° flap, slats
 out; approach = gear down, 30° flap, slats out.
 
-### 6.4 NPD point simulation (`PhysicsNPDModel.single_event`)
+The optional `core_combustor` component stays absent unless core flow,
+temperature, pressure, combustor-exit temperature, and turbine attenuation are
+all supplied. It is never synthesized from thrust/BPR alone.
+
+### 6.5 NPD point simulation and diagnostics
 
 An NPD point is *defined* (Doc 29/ANP) as a steady level flyover at 160 kt
 at fixed power, observed at closest slant distance d. The model simulates
@@ -339,7 +358,16 @@ integration, nothing is bolted on. `predict_table` repeats this over the
 requested thrust settings and the 10 standard distances, yielding an
 `NPDTable` identical in format to the surrogate's output.
 
-### 6.5 Calibration freeze policy
+`evaluate_sources()` accepts an instantaneous `FlightState`.
+`single_event_diagnostics()` retains every component time history, its LAmax
+and SEL, the energetic total, source enablement/fallback status, and input
+status. Validation should proceed in this order: component spectra and
+directivity; receiver time histories and energetic sums; then LAmax/SEL and
+NPD tables. The legacy `single_event(..., return_components=True)` still
+returns the `jet`, `fan`, and `airframe` LAmax roll-ups required by the CLI,
+and additionally exposes the resolved component names.
+
+### 6.6 Calibration freeze policy
 
 The four additive level constants (`C_jet`, `C_fan`, `C_wingflap`, `C_gear`)
 plus one spectral-placement factor (`f_scale = 2^x`, shared by all sources)
@@ -360,6 +388,42 @@ ANP data.
 is not implemented; the physics route covers SEL + LAmax only, and the API
 cross-check is restricted accordingly.
 
+### 6.6 Streamlit physics workspace
+
+The **Aircraft Designer** owns one shared aircraft definition and offers
+learned-only, physics-only and comparison modes. After the learned prediction
+establishes the frozen calibration context, its embedded physics section
+constructs a typed `PhysicsDesign` from exact UI inputs and calls
+`NoisePrediction.physics_diagnostics(...)` plus `physics_table(...)`. The
+learned table is never passed into either method. In comparison mode it is
+evaluated afterward at matching thrust/distance coordinates solely for an
+output overlay and reported differences.
+
+The page exposes event thrust, closest distance, BPR, airframe configuration,
+atmosphere, and an optional detailed engine-deck form. Results include SEL and
+LAmax, ten-distance physics NPD curves, component metrics, receiver time
+histories, supplied/estimated/unavailable status, uncertainty wording, and the
+explicit excluded-effects list. This makes fallback logic visible instead of
+silently treating synthesized concept inputs as measured engine data.
+
+Three v6.3 physical presets (`A320-270N`, `A350-1041`, and `7773ER`) provide
+source-labelled starting points. A selected preset creates its own
+`ParametricAircraft`; the learned overlay is recalculated for that aircraft,
+while the component-physics call remains independent. `input_status` overrides
+mark each manufacturer-backed field as supplied and derived or representative
+geometry as estimated. The maintained source register and assumptions are in
+[`PHYSICS_PRESETS.md`](PHYSICS_PRESETS.md).
+
+Free-field spreading and frequency-dependent atmospheric absorption remain
+the only propagation effects. Event diagnostics explicitly list unmodelled
+installation/shielding, nacelle treatment or suppression, ground reflection,
+lateral attenuation, terrain, and non-uniform atmosphere as future extension
+points. None is hidden inside the four frozen source anchors. Component
+anchors and model form remain uncertain and are not calibrated uncertainty
+intervals; learned-tree dispersion is unrelated and must not be reported as
+physics uncertainty. The route is conceptual screening research, not
+certification.
+
 ---
 
 ## 7. API facade (`pnmf/api.py`)
@@ -369,21 +433,17 @@ cross-check is restricted accordingly.
 `ANPDatabase` and fits the chosen model for every metric/op-mode combination
 up front.
 
-**`DEFAULT_MODEL = "rf"`.** Switched from `"anchor"` on 2026-07-14 as a
-deliberate decision based on the 2026-07-13 LOO bake-off (`pnmf_cli.py
-compare`): by mean per-aircraft median RMSE, rf 2.91 dB, blend 3.19,
-semi-empirical 3.82, anchor 3.83 — the pre-merge default ranked last under
-the bake-off's own selection rule. History: `"anchor"` was the original
-pre-merge choice, carried through the 2026-07-13 module merge unchanged and
-flagged in `FINAL_REPORT.md` §2.4 as a recommended deliberate follow-up;
-this is that follow-up. Available models: `"rf"`, `"semiemp"`, `"blend"`,
-`"anchor"`, plus `"champion"` (the evolved best from the `model_trials`
-registry, §5.3).
+**`DEFAULT_MODEL = "et"`.** The only accepted learned-model strings are
+`"et"` and `"rf"`. `PhysicsNPDModel` is not a third learner; it is invoked as
+an independent output cross-check.
 
 **Default power grid** (per engine, lb, from the aircraft's static thrust T):
 departure `linspace(0.45·T, 0.95·T, 4)`, approach
 `linspace(0.07·T, 0.35·T, 3)`, both rounded — high thrust for departure,
-low for approach. An explicit `power_settings` grid overrides both.
+low for approach. An explicit sequence preserves the legacy shared-grid
+behavior. A mapping such as `{"D": [...], "A": [...]}` supplies separate
+mode grids; a missing mapping entry uses that mode's default. All selected
+grids are validated as finite, positive, unique and ascending.
 
 `predict(aircraft | **kwargs)` returns a **`NoisePrediction`** with:
 
@@ -516,39 +576,27 @@ untouched (same discipline as `predict --dry-run`).
 
 ## 11. Validation architecture
 
-Four independent layers; no layer lets a model see the aircraft it is being
-tested on, and the two prediction routes are never coupled.
+Four complementary layers are maintained; the learned and physics routes are
+never coupled.
 
-1. **Leave-one-aircraft-out (LOO), grouped by aircraft** (`loo_validate`,
-   §5.4): retrain excluding each of the 111 NPD-curve aircraft in turn,
-   predict its full table from parameters alone, compare cell-by-cell.
-   Headline pooled RMSE (2026-07-13 reproduction, ±0.01 dB RF seed jitter):
-   SEL/D **5.09**, SEL/A **4.23**, EPNL/D **5.26**, EPNL/A **5.05**,
-   LAmax/D **5.04**, LAmax/A **4.57**, PNLTM/D **5.36**, PNLTM/A **5.25** dB.
-   Per-aircraft medians are 2.0–3.4 dB; the pooled numbers are dominated by
-   a minority of atypical aircraft.
-2. **Grouped cross-validation in the evolutionary search** (`evolve.py`):
-   GroupKFold by aircraft — the same no-leakage standard as LOO — and
-   fitness measured **exclusively on real ANP curves, never on stored
-   predictions** (the self-training failure mode is designed out, §3).
-3. **External substitution-table check** (`pnmf_cli.py subs`): against
-   19,565 certificated aircraft the surrogate's EPNL trend correlates at
-   **r = 0.63** on 189 types it never trained on; EASA's own hand-curated
-   proxies carry a measured **1.92 dB (departure) / 1.35 dB (approach)**
-   RMSE — the practical accuracy ceiling any proxy-based method should be
-   read against.
-4. **Physics-vs-surrogate cross-check as independent-routes evidence:** the
-   physics route touches ANP data exactly once (the A320-211 calibration,
-   §6.5) and is then frozen, so its fleet performance — **out-of-sample
-   median 2.82 dB RMSE over 12 aircraft** spanning BPR 1.0–9.6 — and the
-   BPR 2→16 sweep (**−9.6 dB SEL departure / −0.3 dB approach**, the
-   literature's airframe-limited-approach narrative) are genuine
-   out-of-sample results. Agreement between the two routes on a future
-   concept (0.2 dB mean for FUTURE-UHBR-TWIN with the evolved champion) is
-   meaningful precisely because the routes share no fitting; the
-   never-couple rule is enforced structurally — `crosscheck_physics`
-   compares OUTPUTS only, and no data-driven model consumes physics-route
-   predictions (or vice versa).
+1. **Aircraft-grouped learned validation.** `validate-model` evaluates ET and
+   RF across all eight metric/mode tasks while grouping by aircraft. Current
+   counts, fold results and limitations are in
+   `docs/MODEL_TRAINING_REPORT.md`.
+2. **Release-ordered validation.** The same report trains on the legacy corpus
+   and evaluates the v6.3 supplement, with a purged variant that removes the
+   shared `7773ER` identity. The resulting sample is small and does not prove
+   unseen-family generalisation.
+3. **Frozen Jet reference holdout.** `validate-jet-reference` provides the
+   predeclared Jet-only protocol, purge set and source provenance documented
+   in `docs/JET_REFERENCE_VALIDATION_REPORT.md`.
+4. **Independent component physics.** The physics route touches ANP truth
+   during the frozen A320-211 calibration only. Source spectra, receiver time
+   histories, component energy sums and SEL/LAmax tables have focused software
+   tests. Historical aggregate-physics figures do not validate the newly
+   detailed Stone/Heidmann/core branches; those require engine-deck and
+   measurement evidence.
 
-Full results, the 737-800 held-out case study and the reproduction record:
-`docs/FINAL_REPORT.md`.
+The current physics equations, output logic, validation ladder and research
+gaps are documented in
+`docs/PNMF_COMPONENT_PHYSICS_TECHNICAL_PAPER.pdf`.

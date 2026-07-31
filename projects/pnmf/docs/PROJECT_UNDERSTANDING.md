@@ -4,7 +4,12 @@
 
 The **Parametric Noise Modeling Framework (PNMF)** gives an early-stage aircraft concept a plausible, ANP-compatible set of noise tables, so it can be assessed in an established aircraft-noise workflow before certification measurements exist.
 
-This guide is for non-specialists. Technical definitions are in [ABBREVIATIONS.md](ABBREVIATIONS.md); detailed methods and results are in [NPD_SYSTEM_DESIGN.md](NPD_SYSTEM_DESIGN.md) and [FINAL_REPORT.md](FINAL_REPORT.md).
+This guide is for non-specialists. Technical definitions are in
+[ABBREVIATIONS.md](ABBREVIATIONS.md); the current system reference is
+[NPD_SYSTEM_DESIGN.md](NPD_SYSTEM_DESIGN.md); learned-model evidence is in
+[MODEL_TRAINING_REPORT.md](MODEL_TRAINING_REPORT.md); and the physics
+architecture, equations and research gaps are in
+[PNMF_COMPONENT_PHYSICS_TECHNICAL_PAPER.pdf](PNMF_COMPONENT_PHYSICS_TECHNICAL_PAPER.pdf).
 
 ## 1. The problem PNMF solves
 
@@ -30,7 +35,12 @@ The main output is a set of NPD tables for SEL, LAmax, EPNL, and PNLTM. Each is 
 ### Uses two independent prediction routes
 
 1. **Data-driven surrogate.** Extra Trees (`et`, default) or Random Forest (`rf`) learns from the combined legacy-v2.3 plus v6.3 ANP corpus. These are the only supported learned models. Per-tree spread provides a per-cell uncertainty indicator.
-2. **Physics-based route.** A separate, simplified acoustic model combines jet, fan, and airframe sources with propagation effects. Its constants are calibrated once to an A320-211 reference and then frozen. It predicts SEL and LAmax only.
+2. **Physics-based route.** A separate component model evaluates gated
+   jet, fan and optional core sources plus six airframe sources, propagates
+   their one-third-octave spectra into receiver time histories, and derives
+   component and total SEL/LAmax. Missing detailed inputs trigger visible
+   fallbacks. Its four source anchors are calibrated once to an A320-211
+   reference and then frozen. It predicts SEL and LAmax only.
 
 The routes are intentionally not trained from one another. Agreement increases confidence; large disagreement signals that the concept may be outside the well-supported range and deserves engineering review.
 
@@ -119,7 +129,7 @@ The following work would expand the project most usefully. These are proposals, 
 | Highest | Validate the operational-profile and downstream interface against ECAC Doc 29 reference cases and the intended FSR/NIROS integration. | This would turn the current conceptual bridge into a verified workflow component. |
 | High | Add tone-correction and duration machinery to the physics route so it covers EPNL and PNLTM as well as SEL and LAmax. | The independent cross-check would then cover all NPD metrics. |
 | High | Add an explicit out-of-distribution detector using feature-space distance, configuration flags, and calibrated uncertainty. | A clearer warning system would reduce overconfidence for concepts with no close ANP analogue. |
-| High | Complete and interpret the full expanded-corpus ET/RF validation now that v6.3 CSV integration is implemented. | This establishes measured post-integration evidence without reusing legacy accuracy claims. |
+| High | Add a curated aircraft-family split and prospectively frozen external NPD set beyond the completed grouped and release-ordered ET/RF validation. | This would test transfer beyond the related families represented in the current validation sets. |
 | Medium | Add configuration-specific models or targeted data for turboprops, piston aircraft, and sparse engine classes. | The current population is uneven; specialised treatment can reduce class-specific bias. |
 | Medium | Calibrate uncertainty formally, for example with held-out residual calibration or conformal prediction. | Reported intervals would be easier to interpret quantitatively. |
 | Medium | Add scenario batches and automated trade-study reports. | Designers could compare many concepts, operating procedures, and observer locations reproducibly. |

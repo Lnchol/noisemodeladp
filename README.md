@@ -4,22 +4,16 @@ The application is [`projects/pnmf`](projects/pnmf/README.md). Root
 `AGENTS.md` routes Codex work; `projects/pnmf/AGENTS.md` defines the modeling
 invariants.
 
-## Windows setup and checks
+## Windows launch and checks
 
-Run from the repository root:
+For the fastest start, double-click:
 
-```powershell
-py -3 -m venv projects\pnmf\.venv
-projects\pnmf\.venv\Scripts\python.exe -m pip install -r projects\pnmf\requirements.txt
-projects\pnmf\.venv\Scripts\python.exe projects\pnmf\pnmf_cli.py datastore
-projects\pnmf\.venv\Scripts\python.exe projects\pnmf\pnmf_cli.py manifest
-projects\pnmf\.venv\Scripts\python.exe -m pytest projects\pnmf\tests -q
-projects\pnmf\.venv\Scripts\python.exe projects\pnmf\pnmf_cli.py validate-model --folds 3
-projects\pnmf\.venv\Scripts\python.exe projects\pnmf\pnmf_cli.py compare
-projects\pnmf\.venv\Scripts\python.exe projects\pnmf\pnmf_cli.py physics
-```
+`projects\pnmf\Launch_PNMF.cmd`
 
-`projects\pnmf\pnmf.ps1 <task>` is the caller-CWD-independent task runner.
+It creates the private virtual environment, installs dependencies when needed,
+launches Streamlit, and opens PNMF in the browser. The PowerShell equivalent is
+`projects\pnmf\pnmf.ps1`; task commands such as
+`projects\pnmf\pnmf.ps1 test` bootstrap the environment automatically too.
 
 Raw ANP sources in `projects/pnmf/03_data`, the rebuilt SQLite datastore,
 trained model files, `.venv`, and generated `outputs` are local/ignored
@@ -43,8 +37,9 @@ must not commit or push unless explicitly asked.
 - [Project understanding](projects/pnmf/docs/PROJECT_UNDERSTANDING.md)
 - [System design](projects/pnmf/docs/NPD_SYSTEM_DESIGN.md)
 - [Model architecture](projects/pnmf/docs/MODEL_ARCHITECTURE_REPORT.md)
-- [Academic paper](projects/pnmf/docs/academic_paper.md)
-- [Final report](projects/pnmf/docs/FINAL_REPORT.md)
+- [Component-physics technical paper](projects/pnmf/docs/PNMF_COMPONENT_PHYSICS_TECHNICAL_PAPER.pdf)
+- [Current learned-model validation](projects/pnmf/docs/MODEL_TRAINING_REPORT.md)
+- [Jet reference validation](projects/pnmf/docs/JET_REFERENCE_VALIDATION_REPORT.md)
 - [Migration progress](projects/pnmf/docs/MIGRATION_PROGRESS_REPORT.md)
 - [Abbreviations and glossary](projects/pnmf/docs/ABBREVIATIONS.md)
 - [Release notes: noiseframeworkv1](projects/pnmf/docs/releases/noiseframeworkv1.md)

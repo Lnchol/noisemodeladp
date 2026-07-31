@@ -30,10 +30,37 @@ Predictions are projected to monotone non-increasing distance curves.
 
 ## 3. Cross-check component physics
 
-`PhysicsNPDModel` independently combines jet, fan, and airframe component
-sources and propagation. It is calibrated once on A320-211 and then frozen.
-It needs a bypass ratio and component/geometry assumptions. Its supported
-metrics are SEL and LAmax; EPNL/PNLTM tone corrections are outside scope.
+`PhysicsNPDModel` independently evaluates gated jet, fan and optional core
+sources plus six airframe sources. It propagates one-third-octave spectra into
+component and total receiver time histories, then derives SEL and LAmax.
+Inputs are marked supplied, estimated or unavailable, and missing detailed
+engine data trigger explicit fallbacks. Four source anchors are calibrated
+once on A320-211 and then frozen. EPNL/PNLTM tone corrections remain outside
+scope. Full equations and gaps are documented in
+`PNMF_COMPONENT_PHYSICS_TECHNICAL_PAPER.pdf`.
+
+To run it interactively, stay in **Aircraft Designer**. Select one shared
+aircraft and choose learned only, component physics only, or compare mode.
+Compare mode prepares ET/RF and then exposes event thrust, closest distance,
+BPR, airframe/configuration and atmosphere below the shared-aircraft summary.
+Optional typed engine-deck fields activate detailed fan and core paths when
+complete. Physics SEL/LAmax, NPD curves, component contributions, event time
+histories and evidence-status tables appear in the same section. ET/RF is only
+an output overlay and does not provide a physics input.
+
+Each run button maintains a live operation trace. ET/RF reports power-grid
+canonicalization, feature preparation and all metric/operation table
+evaluations. Component physics reports unit-boundary conversion, typed design
+assembly, frozen calibration, enabled sources, propagation, acoustic-energy
+summation, event metrics and both physics NPD tables. The trace observes
+execution only; it does not change calculations or couple the two routes.
+
+The shared-aircraft selector includes source-labelled physical presets for the
+v6.3 `A320-270N`, `A350-1041`, and `7773ER` records. Applying a preset updates
+both the learned aircraft and physics inputs. Published span, engine and
+landing-gear fields remain `supplied`; calculated wing area and incomplete
+geometry remain `estimated`. The source register is
+[`PHYSICS_PRESETS.md`](PHYSICS_PRESETS.md).
 
 ## 4. Validate and store
 

@@ -47,3 +47,4 @@ projects/pnmf/tmp/**
 projects/pnmf/.streamlit/secrets.toml
 *.joblib
 *.pkl
+tmp/SERDP09_MDOEchevron/
