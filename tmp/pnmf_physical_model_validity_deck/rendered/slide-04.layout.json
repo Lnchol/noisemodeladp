@@ -1,0 +1,1112 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/2ml011",
+    "id": "2ml011",
+    "slide": 4,
+    "layoutId": "62f19e05-18a8-40c5-9610-608a5edbd713",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "5e5c0207-212e-4264-8079-5b21ae23b3c6",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Arial"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "62f19e05-18a8-40c5-9610-608a5edbd713",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "5e5c0207-212e-4264-8079-5b21ae23b3c6",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "5e5c0207-212e-4264-8079-5b21ae23b3c6",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3qd0n6x0",
+      "id": "1",
+      "name": "kicker-4",
+      "bbox": [
+        58,
+        34,
+        620,
+        24
+      ],
+      "geometry": "rect",
+      "text": "03  /  PROPULSION PHYSICS",
+      "textPreview": "03  /  PROPULSION PHYSICS",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03  /  PROPULSION PHYSICS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03  /  PROPULSION PHYSICS",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03  /  PROPULSION PHYSICS",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4rmhwbyl",
+      "id": "2",
+      "name": "title-4",
+      "bbox": [
+        58,
+        65,
+        1150,
+        62
+      ],
+      "geometry": "rect",
+      "text": "Simplified source laws show the key inputs",
+      "textPreview": "Simplified source laws show the key inputs",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Arial",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Simplified source laws show the key inputs"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Simplified source laws show the key inputs",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Arial",
+            "color": "#111111",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Simplified source laws show the key inputs",
+              "fontSize": 38,
+              "typeface": "Arial",
+              "color": "#111111",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5svipgf6",
+      "id": "3",
+      "name": "rule-4",
+      "bbox": [
+        58,
+        137,
+        1164,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8BCC4",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qt4zylgb",
+      "id": "4",
+      "name": "footer-4",
+      "bbox": [
+        58,
+        680,
+        720,
+        18
+      ],
+      "geometry": "rect",
+      "text": "PNMF  |  physical-model validity  |  4",
+      "textPreview": "PNMF  |  physical-model validity  |  4",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "Arial",
+        "color": "#5F6670",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PNMF  |  physical-model validity  |  4"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PNMF  |  physical-model validity  |  4",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Arial",
+            "color": "#5F6670",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PNMF  |  physical-model validity  |  4",
+              "fontSize": 12,
+              "typeface": "Arial",
+              "color": "#5F6670",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/rud0rqxw",
+      "id": "5",
+      "name": "jet-eq",
+      "bbox": [
+        58,
+        186,
+        540,
+        300
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#EDEDED",
+      "lineColor": "#EDEDED",
+      "lineWidth": 1
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/svmh0vyh",
+      "id": "6",
+      "name": "jet-eq-title",
+      "bbox": [
+        90,
+        218,
+        410,
+        32
+      ],
+      "geometry": "rect",
+      "text": "JET  /  Stone-style mixing",
+      "textPreview": "JET  /  Stone-style mixing",
+      "resolvedFontSize": 25,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 25,
+        "typeface": "Arial",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "JET  /  Stone-style mixing"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "JET  /  Stone-style mixing",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "typeface": "Arial",
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "JET  /  Stone-style mixing",
+              "fontSize": 25,
+              "typeface": "Arial",
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dwvit0f2",
+      "id": "7",
+      "name": "jet-eq-1",
+      "bbox": [
+        90,
+        272,
+        410,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Iⱼₑₜ  ∝  ρⱼ² · Aⱼ · Vⱼ⁸",
+      "textPreview": "Iⱼₑₜ  ∝  ρⱼ² · Aⱼ · Vⱼ⁸",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Arial",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Iⱼₑₜ  ∝  ρⱼ² · Aⱼ · Vⱼ⁸"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Iⱼₑₜ  ∝  ρⱼ² · Aⱼ · Vⱼ⁸",
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Arial",
+            "color": "#111111",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Iⱼₑₜ  ∝  ρⱼ² · Aⱼ · Vⱼ⁸",
+              "fontSize": 22,
+              "typeface": "Arial",
+              "color": "#111111",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mx0zmhg7",
+      "id": "8",
+      "name": "jet-eq-2",
+      "bbox": [
+        90,
+        324,
+        500,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Lⱼₑₜ  ≈  Cⱼₑₜ + 80 log₁₀(Vⱼ/c₀) + 10 log₁₀(Aⱼ)",
+      "textPreview": "Lⱼₑₜ  ≈  Cⱼₑₜ + 80 log₁₀(Vⱼ/c₀) + 10 log₁₀(Aⱼ)",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Lⱼₑₜ  ≈  Cⱼₑₜ + 80 log₁₀(Vⱼ/c₀) + 10 log₁₀(Aⱼ)"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Lⱼₑₜ  ≈  Cⱼₑₜ + 80 log₁₀(Vⱼ/c₀) + 10 log₁₀(Aⱼ)",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#111111",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Lⱼₑₜ  ≈  Cⱼₑₜ + 80 log₁₀(Vⱼ/c₀) + 10 log₁₀(Aⱼ)",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#111111",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7y9gfmxs",
+      "id": "9",
+      "name": "jet-eq-3",
+      "bbox": [
+        90,
+        374,
+        470,
+        34
+      ],
+      "geometry": "rect",
+      "text": "fₚₑₐₖ  ≈  0.25 · fₛ꜀ₐₗₑ · Vⱼ / Dⱼ",
+      "textPreview": "fₚₑₐₖ  ≈  0.25 · fₛ꜀ₐₗₑ · Vⱼ / Dⱼ",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Arial",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "fₚₑₐₖ  ≈  0.25 · fₛ꜀ₐₗₑ · Vⱼ / Dⱼ"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "fₚₑₐₖ  ≈  0.25 · fₛ꜀ₐₗₑ · Vⱼ / Dⱼ",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Arial",
+            "color": "#111111",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "fₚₑₐₖ  ≈  0.25 · fₛ꜀ₐₗₑ · Vⱼ / Dⱼ",
+              "fontSize": 20,
+              "typeface": "Arial",
+              "color": "#111111",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/r25kfe94",
+      "id": "10",
+      "name": "jet-eq-note",
+      "bbox": [
+        90,
+        426,
+        442,
+        42
+      ],
+      "geometry": "rect",
+      "text": "Velocity dominates; detailed streams add density/pressure state. Fallback stays visible.",
+      "textPreview": "Velocity dominates; detailed streams add density/pressure state. Fallback stays visible.",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Arial",
+        "color": "#5F6670",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Velocity dominates; detailed streams add density/pressure"
+          },
+          {
+            "index": 2,
+            "text": "state. Fallback stays visible."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Velocity dominates; detailed streams add density/pressure state. Fallback stays visible.",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Arial",
+            "color": "#5F6670",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Velocity dominates; detailed streams add density/pressure state. Fallback stays visible.",
+              "fontSize": 17,
+              "typeface": "Arial",
+              "color": "#5F6670",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/61wjm98j",
+      "id": "11",
+      "name": "fan-eq",
+      "bbox": [
+        632,
+        186,
+        590,
+        300
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#D8F1FF",
+      "lineColor": "#D8F1FF",
+      "lineWidth": 1
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/t4n2hora",
+      "id": "12",
+      "name": "fan-eq-title",
+      "bbox": [
+        664,
+        218,
+        460,
+        32
+      ],
+      "geometry": "rect",
+      "text": "FAN  /  Heidmann-style path",
+      "textPreview": "FAN  /  Heidmann-style path",
+      "resolvedFontSize": 25,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 25,
+        "typeface": "Arial",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "FAN  /  Heidmann-style path"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "FAN  /  Heidmann-style path",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "typeface": "Arial",
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "FAN  /  Heidmann-style path",
+              "fontSize": 25,
+              "typeface": "Arial",
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/s3e1ojqp",
+      "id": "13",
+      "name": "fan-eq-1",
+      "bbox": [
+        664,
+        272,
+        540,
+        36
+      ],
+      "geometry": "rect",
+      "text": "L𝒇𝒂𝒏  ≈  C𝒇𝒂𝒏 + 10 log₁₀(ṁ) + 40 log₁₀(Mₜᵢₚ)",
+      "textPreview": "L𝒇𝒂𝒏  ≈  C𝒇𝒂𝒏 + 10 log₁₀(ṁ) + 40 log₁₀(Mₜᵢₚ)",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Arial",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "L𝒇𝒂𝒏  ≈  C𝒇𝒂𝒏 + 10 log₁₀(ṁ) + 40 log₁₀(Mₜᵢₚ)"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "L𝒇𝒂𝒏  ≈  C𝒇𝒂𝒏 + 10 log₁₀(ṁ) + 40 log₁₀(Mₜᵢₚ)",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Arial",
+            "color": "#111111",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "L𝒇𝒂𝒏  ≈  C𝒇𝒂𝒏 + 10 log₁₀(ṁ) + 40 log₁₀(Mₜᵢₚ)",
+              "fontSize": 20,
+              "typeface": "Arial",
+              "color": "#111111",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jylkbe98",
+      "id": "14",
+      "name": "fan-eq-2",
+      "bbox": [
+        664,
+        324,
+        520,
+        34
+      ],
+      "geometry": "rect",
+      "text": "BPF  =  Uₜᵢₚ · Nᵦₗₐdₑₛ / (π · D)",
+      "textPreview": "BPF  =  Uₜᵢₚ · Nᵦₗₐdₑₛ / (π · D)",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 21,
+        "typeface": "Arial",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "BPF  =  Uₜᵢₚ · Nᵦₗₐdₑₛ / (π · D)"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "BPF  =  Uₜᵢₚ · Nᵦₗₐdₑₛ / (π · D)",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "typeface": "Arial",
+            "color": "#111111",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "BPF  =  Uₜᵢₚ · Nᵦₗₐdₑₛ / (π · D)",
+              "fontSize": 21,
+              "typeface": "Arial",
+              "color": "#111111",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ixcji98n",
+      "id": "15",
+      "name": "fan-eq-3",
+      "bbox": [
+        664,
+        374,
+        300,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Uₜᵢₚ  =  Mₜᵢₚ · c₀",
+      "textPreview": "Uₜᵢₚ  =  Mₜᵢₚ · c₀",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Arial",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Uₜᵢₚ  =  Mₜᵢₚ · c₀"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Uₜᵢₚ  =  Mₜᵢₚ · c₀",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Arial",
+            "color": "#111111",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Uₜᵢₚ  =  Mₜᵢₚ · c₀",
+              "fontSize": 20,
+              "typeface": "Arial",
+              "color": "#111111",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/50n2d4ry",
+      "id": "16",
+      "name": "fan-eq-note",
+      "bbox": [
+        664,
+        426,
+        500,
+        42
+      ],
+      "geometry": "rect",
+      "text": "Detailed fan paths add temperature-rise, spacing, tone, and lobe terms; fallback stays visible.",
+      "textPreview": "Detailed fan paths add temperature-rise, spacing, tone, and lobe terms; fallback stays visible.",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Arial",
+        "color": "#5F6670",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Detailed fan paths add temperature-rise, spacing, tone, and lobe"
+          },
+          {
+            "index": 2,
+            "text": "terms; fallback stays visible."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Detailed fan paths add temperature-rise, spacing, tone, and lobe terms; fallback stays visible.",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Arial",
+            "color": "#5F6670",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Detailed fan paths add temperature-rise, spacing, tone, and lobe terms; fallback stays visible.",
+              "fontSize": 17,
+              "typeface": "Arial",
+              "color": "#5F6670",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4ze1kzqd",
+      "id": "17",
+      "name": "auto-text-3",
+      "bbox": [
+        120,
+        554,
+        1040,
+        38
+      ],
+      "geometry": "rect",
+      "text": "Evidence dependency: mass flow, nozzle state, fan diameter, RPM/blade count, temperature rise, and provenance.",
+      "textPreview": "Evidence dependency: mass flow, nozzle state, fan diameter, RPM/blade count, temperature rise, and provenance.",
+      "resolvedFontSize": 19.22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 21,
+        "typeface": "Arial",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.92,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Evidence dependency: mass flow, nozzle state, fan diameter, RPM/blade count, temperature rise, and provenance."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Evidence dependency: mass flow, nozzle state, fan diameter, RPM/blade count, temperature rise, and provenance.",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "typeface": "Arial",
+            "color": "#111111",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Evidence dependency: mass flow, nozzle state, fan diameter, RPM/blade count, temperature rise, and provenance.",
+              "fontSize": 21,
+              "typeface": "Arial",
+              "color": "#111111",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

@@ -59,6 +59,24 @@ def test_sorted_power_rows_keep_uncertainty_aligned():
     assert np.array_equal(std[:, 0], table.P / 1000.0)
 
 
+def test_prediction_progress_callback_reports_every_combo():
+    events = []
+    result = _predictor().predict(
+        _aircraft(),
+        progress_callback=lambda event, details: events.append(
+            (event, details)))
+
+    starts = [details for event, details in events
+              if event == "combo_start"]
+    done = [details for event, details in events if event == "combo_done"]
+    assert len(starts) == len(done) == len(result.tables) == 3
+    assert [(item["metric"], item["op_mode"]) for item in starts] == [
+        ("SEL", "D"), ("SEL", "A"), ("LAmax", "D")]
+    assert all(item["distances"] == 10 for item in done)
+    assert events[-1] == (
+        "prediction_done", {"tables": 3, "aircraft": "TEST"})
+
+
 @pytest.mark.parametrize("grid", [[], [0], [-1], [np.nan], [np.inf], [1, 1]])
 def test_invalid_power_grids_are_rejected(grid):
     with pytest.raises(ValueError):

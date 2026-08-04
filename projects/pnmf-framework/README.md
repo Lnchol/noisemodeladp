@@ -48,24 +48,48 @@ all eight tasks: SEL, LAmax, EPNL, and PNLTM for approach and departure.
 4. **Validation/storage:** compare routes, apply the physical QA gate, and
    store accepted predictions only in `predicted_*` tables.
 
+The Streamlit **Aircraft Designer** now owns the complete workflow. Select one
+shared preset or custom aircraft, then choose **Learned ET/RF only**,
+**Component physics only**, or **Compare learned + physics**. Compare mode runs
+ET/RF for the shared aircraft and places exact event thrust, distance,
+airframe/configuration, atmosphere and optional engine-deck physics inputs
+directly below it. The resulting SEL/LAmax curves are overlaid at identical
+thrust and distance coordinates. ET/RF remains an output comparison and never
+feeds the physics calculation.
+
+Both run buttons expose a live calculation log. The learned log identifies
+feature preparation and every metric/operation NPD table evaluation. The
+physics log identifies the SI boundary conversion, frozen calibration,
+component-source evaluation, propagation, energetic summation, SEL/LAmax
+formulas, physics NPD tables and same-coordinate comparison. Completed logs
+remain visible until the aircraft or calculation is replaced.
+
+For a faster check, apply one of the source-labelled v6.3 presets to both
+routes:
+`A320-270N`, `A350-1041`, or `7773ER`. Each preset loads manufacturer-backed
+BPR/fan/span/landing-gear values while keeping unsourced geometry visibly
+estimated. See [`docs/PHYSICS_PRESETS.md`](docs/PHYSICS_PRESETS.md) for the
+field-level assumptions and first-party references.
+
 The v6.3 CSVs are training data, not merely evaluation data. The embedded
 manifest proves which source contributed each table and training row.
 
-## Windows setup
+## One-click Windows launch
 
-From this directory:
+Double-click `Launch_PNMF.cmd`. On the first run it creates the private
+`.venv`, installs `requirements.txt`, starts Streamlit, and opens
+`http://localhost:8501`. Later runs reuse the environment. Keep the launcher
+window open while using PNMF; close it to stop the local server.
+
+The PowerShell equivalent is:
 
 ```powershell
-py -3 -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\python.exe pnmf_cli.py datastore
-.venv\Scripts\python.exe pnmf_cli.py manifest
-.venv\Scripts\python.exe -m pytest tests -q
+.\pnmf.ps1
 ```
 
-From the EFES root, use the same interpreter with `projects\pnmf\...` paths.
-The CLI, UI, tests, and `pnmf.ps1` resolve data from this directory regardless
-of caller CWD.
+`pnmf.ps1` automatically creates or updates `.venv` before every task and
+resolves data from this directory regardless of caller CWD. Python 3 with the
+standard Windows `py` launcher is the only prerequisite.
 
 ## Supported workflows
 

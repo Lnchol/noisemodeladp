@@ -45,6 +45,15 @@ projects/pnmf/outputs/**
 !projects/pnmf/outputs/.gitkeep
 projects/pnmf/tmp/**
 projects/pnmf/.streamlit/secrets.toml
+projects/pnmf/docs/**
 *.joblib
 *.pkl
 tmp/SERDP09_MDOEchevron/
+
+# --- Legacy PNMF workspace: local data, environments, and bundles ---
+projects/pnmf-framework/.venv/
+projects/pnmf-framework.zip
+
+
+# --- Codex/OMO local orchestration state ---
+.omo/

@@ -1,5 +1,7 @@
 # physics-reference-harness - Work Plan
 
+> Superseded 2026-08-01 by user direction: remove NASA/SERDP09 implementation. The external archive remains an ignored, optional future high-speed supplementary-validation input; this plan's remaining final-gate items are intentionally not executed.
+
 ## TL;DR (For humans)
 **What you'll get:** A local physics-reference check using the supplied NASA jet-noise measurements. It will either produce clearly scoped spectrum/directivity screening residuals or explain exactly why the reference cannot validly be compared.
 
@@ -75,7 +77,7 @@ Wave 3: todo 5 runs the supplied archive and captures the decision/report.
   QA scenarios (name the exact tool + invocation): `projects\\pnmf\\pnmf.ps1 test` includes valid synthetic data and malformed/invalid `-999` input; Evidence `<attemptDir>/task-2-physics-reference-harness.md`.
   Commit: N | n/a
 
-- [ ] 3. Evaluate only a proven source-model comparison, otherwise report incompatibility
+- [x] 3. Evaluate only a proven source-model comparison, otherwise report incompatibility
   What to do / Must NOT do: Add an evaluator beside the parser that uses the existing `JetSource` and `THIRD_OCTAVE_HZ` with fixed, declared parameters and no `PhysicsNPDModel.calibrate` call. It may evaluate case 844 only after proving from source documentation how core/bypass measurements map to `outer`/ `merged` streams and how model-scale frequency maps to the prediction basis. For a compatible case, calculate per-angle peak-normalized spectral-shape RMSE plus broadband angular levels normalized once at a declared reference angle. Otherwise produce `incompatible` with the missing proof named. Do not fit any parameter, compare absolute levels, or invoke the simple mixed-jet fallback.
   Parallelization: Wave 2 | Blocked by: 2 | Blocks: 4, 5
   References (executor has NO interview context - be exhaustive): `projects/pnmf/pnmf/physics.py` (`JetSource.spectrum_with_diagnostics`, `component_spectra_with_diagnostics`, `PhysicsNPDModel.calibrate`); `projects/pnmf/docs/memory/decisions.md`; NASA dataset page `https://data.nasa.gov/dataset/serdp09-mdoe-chevron-nozzle-noise-database`; archive Test Requirements Table 2 and page 12.
@@ -83,7 +85,7 @@ Wave 3: todo 5 runs the supplied archive and captures the decision/report.
   QA scenarios (name the exact tool + invocation): `projects\\pnmf\\pnmf.ps1 test`; inspect the generated synthetic report for verdict, declared fixed parameters, metrics, and exclusions; Evidence `<attemptDir>/task-3-physics-reference-harness.md`.
   Commit: N | n/a
 
-- [ ] 4. Expose one explicit, CWD-independent validation command
+- [x] 4. Expose one explicit, CWD-independent validation command
   What to do / Must NOT do: Add `validate-serdp09 --data-root <absolute-path>` to `projects/pnmf/pnmf_cli.py` and dispatch it from `projects/pnmf/pnmf.ps1`, following the existing command/error style. Return a non-zero exit for missing/relative roots and incompatible reference conditions while still writing/printing the diagnostics location. Keep `validate-jet-reference` and every existing command unchanged; do not add UI/API endpoints or a default data-root.
   Parallelization: Wave 2 | Blocked by: 2, 3 | Blocks: 5
   References (executor has NO interview context - be exhaustive): `projects/pnmf/pnmf_cli.py`; `projects/pnmf/pnmf.ps1`; `projects/pnmf/README.md`; root `AGENTS.md` command routing rule.
@@ -91,7 +93,7 @@ Wave 3: todo 5 runs the supplied archive and captures the decision/report.
   QA scenarios (name the exact tool + invocation): from repository root and a second temporary CWD, invoke `projects\\pnmf\\pnmf.ps1 validate-serdp09 --data-root <absolute-path>`; Evidence `<attemptDir>/task-4-physics-reference-harness.md`.
   Commit: N | n/a
 
-- [ ] 5. Run the real local case 844 and save an auditable screening report
+- [x] 5. Run the real local case 844 and save an auditable screening report
   What to do / Must NOT do: Execute the new command against the supplied `tmp/SERDP09_MDOEchevron` archive. Select case 844 from `SERDP09_FF.db` and record the source hashes, record/condition fields, angle/band exclusions, fixed model inputs, compatibility result, and metric definitions. Preserve an honest `incompatible` result if source mapping or frequency basis cannot be proven; do not convert it into an implementation/calibration task.
   Parallelization: Wave 3 | Blocked by: 1, 2, 3, 4 | Blocks: final wave
   References (executor has NO interview context - be exhaustive): archive case `844_nb/844_nb.dat`; `SERDP09_FF.db` row for `icrdg=844`; task 3 evaluator contract; NASA source citation above.
@@ -111,8 +113,9 @@ Wave 3: todo 5 runs the supplied archive and captures the decision/report.
   Confirm A320 frozen calibration, Doc-29/ET/RF behavior, database, UI/API, and existing validation commands are untouched; run `projects\\pnmf\\pnmf.ps1 test`. Evidence: `<attemptDir>/final-F4-physics-reference-harness.md`.
 
 ## Commit strategy
-- No commit or push: the user has not requested either.
-- Keep the supplied archive and generated real-data report ignored. Stage nothing automatically.
+- Major completed phases may be committed and pushed to `origin/main` under the user's standing authorization.
+- Before each push, verify the staged path set excludes raw NASA data, local SQLite databases, model artifacts, virtual environments, secrets, and unrelated dirty work.
+- Keep the supplied archive and generated real-data report ignored. Never stage them automatically.
 
 ## Success criteria
 - `validate-serdp09` is explicit-root, CWD-independent, local-only, and cannot silently turn invalid archive evidence into a prediction.

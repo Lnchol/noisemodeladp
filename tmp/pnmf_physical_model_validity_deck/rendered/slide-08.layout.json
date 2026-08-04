@@ -1,0 +1,1427 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/y9n1ik",
+    "id": "y9n1ik",
+    "slide": 8,
+    "layoutId": "62f19e05-18a8-40c5-9610-608a5edbd713",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "5e5c0207-212e-4264-8079-5b21ae23b3c6",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Arial",
+      "Courier New"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "62f19e05-18a8-40c5-9610-608a5edbd713",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "5e5c0207-212e-4264-8079-5b21ae23b3c6",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "5e5c0207-212e-4264-8079-5b21ae23b3c6",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jehkjalg",
+      "id": "1",
+      "name": "kicker-8",
+      "bbox": [
+        58,
+        34,
+        620,
+        24
+      ],
+      "geometry": "rect",
+      "text": "07  /  FORMULA REFERENCE",
+      "textPreview": "07  /  FORMULA REFERENCE",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "07  /  FORMULA REFERENCE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "07  /  FORMULA REFERENCE",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "07  /  FORMULA REFERENCE",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kfqlsfm1",
+      "id": "2",
+      "name": "title-8",
+      "bbox": [
+        58,
+        65,
+        1150,
+        62
+      ],
+      "geometry": "rect",
+      "text": "LaTeX formulation: source spectra become receiver metrics",
+      "textPreview": "LaTeX formulation: source spectra become receiver metrics",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Arial",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "LaTeX formulation: source spectra become receiver metrics"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "LaTeX formulation: source spectra become receiver metrics",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Arial",
+            "color": "#111111",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "LaTeX formulation: source spectra become receiver metrics",
+              "fontSize": 38,
+              "typeface": "Arial",
+              "color": "#111111",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lgz2lk3m",
+      "id": "3",
+      "name": "rule-8",
+      "bbox": [
+        58,
+        137,
+        1164,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8BCC4",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/61s3up47",
+      "id": "4",
+      "name": "footer-8",
+      "bbox": [
+        58,
+        680,
+        720,
+        18
+      ],
+      "geometry": "rect",
+      "text": "PNMF  |  physical-model validity  |  8",
+      "textPreview": "PNMF  |  physical-model validity  |  8",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "Arial",
+        "color": "#5F6670",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PNMF  |  physical-model validity  |  8"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PNMF  |  physical-model validity  |  8",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Arial",
+            "color": "#5F6670",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PNMF  |  physical-model validity  |  8",
+              "fontSize": 12,
+              "typeface": "Arial",
+              "color": "#5F6670",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7214nulc",
+      "id": "5",
+      "name": "auto-text-9",
+      "bbox": [
+        58,
+        166,
+        980,
+        32
+      ],
+      "geometry": "rect",
+      "text": "Copy these blocks into PowerPoint's equation editor and keep the comparison definition unchanged.",
+      "textPreview": "Copy these blocks into PowerPoint's equation editor and keep the comparison definition unchanged.",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Arial",
+        "color": "#5F6670",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Copy these blocks into PowerPoint's equation editor and keep the comparison definition unchanged."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Copy these blocks into PowerPoint's equation editor and keep the comparison definition unchanged.",
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Arial",
+            "color": "#5F6670",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Copy these blocks into PowerPoint's equation editor and keep the comparison definition unchanged.",
+              "fontSize": 22,
+              "typeface": "Arial",
+              "color": "#5F6670",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/s3alwz2x",
+      "id": "6",
+      "name": "latex-source",
+      "bbox": [
+        58,
+        210,
+        366,
+        358
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#EDEDED",
+      "lineColor": "#EDEDED",
+      "lineWidth": 1
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/t4jmp43i",
+      "id": "7",
+      "name": "latex-source-title",
+      "bbox": [
+        82,
+        234,
+        318,
+        26
+      ],
+      "geometry": "rect",
+      "text": "1  /  SOURCE LEVEL",
+      "textPreview": "1  /  SOURCE LEVEL",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Arial",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "1  /  SOURCE LEVEL"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "1  /  SOURCE LEVEL",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Arial",
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "1  /  SOURCE LEVEL",
+              "fontSize": 20,
+              "typeface": "Arial",
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u5s3ypk3",
+      "id": "8",
+      "name": "latex-prop",
+      "bbox": [
+        457,
+        210,
+        366,
+        358
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/f614rulo",
+      "id": "9",
+      "name": "latex-prop-title",
+      "bbox": [
+        481,
+        234,
+        318,
+        26
+      ],
+      "geometry": "rect",
+      "text": "2  /  PROPAGATE + SUM",
+      "textPreview": "2  /  PROPAGATE + SUM",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Arial",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "2  /  PROPAGATE + SUM"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "2  /  PROPAGATE + SUM",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Arial",
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "2  /  PROPAGATE + SUM",
+              "fontSize": 20,
+              "typeface": "Arial",
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/v6pk369w",
+      "id": "10",
+      "name": "latex-compare",
+      "bbox": [
+        856,
+        210,
+        366,
+        358
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#D8F1FF",
+      "lineColor": "#D8F1FF",
+      "lineWidth": 1
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ulg3a1sb",
+      "id": "11",
+      "name": "latex-compare-title",
+      "bbox": [
+        880,
+        234,
+        318,
+        26
+      ],
+      "geometry": "rect",
+      "text": "3  /  COMPARE TO DATA",
+      "textPreview": "3  /  COMPARE TO DATA",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Arial",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "3  /  COMPARE TO DATA"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "3  /  COMPARE TO DATA",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Arial",
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "3  /  COMPARE TO DATA",
+              "fontSize": 20,
+              "typeface": "Arial",
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/h8r25gr2",
+      "id": "12",
+      "name": "latex-source-text",
+      "bbox": [
+        82,
+        280,
+        318,
+        252
+      ],
+      "geometry": "rect",
+      "text": "I_{jet}\\propto\\rho_j^2 A_j v_j^8\nL_{jet,1m}=C_j+80\\log_{10}(v_j/c_0)\n\\quad+10\\log_{10}(A_j)+D_j(\\theta)+H_j(f)\n\nL_{fan,1m}=C_f+10\\log_{10}(\\dot m)\n\\quad+40\\log_{10}(M_{tip})+D_f(\\theta)+H_f(f)\n\nL_{air,1m}=C_a+p\\log_{10}(V/c_0)\n\\quad+G_a+D_a(\\theta)+H_a(f),\\quad p\\in\\{50,60\\}",
+      "textPreview": "I_{jet}\\propto\\rho_j^2 A_j v_j^8 | L_{jet,1m}=C_j+80\\log_{10}(v_j/c_0) | \\quad+10\\log_{10}(A_j)+D_j(\\theta)+H_j(f) |  | L_{fan,1m}=C_f+10...",
+      "resolvedFontSize": 15.13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15.51,
+        "typeface": "Courier New",
+        "color": "#111111",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.98,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 13,
+        "lines": [
+          {
+            "index": 1,
+            "text": "I_{jet}\\propto\\rho_j^2 A_j v_j^8"
+          },
+          {
+            "index": 2,
+            "text": "L_{jet,1m}=C_j+80\\log_{10}(v_j/c_0"
+          },
+          {
+            "index": 3,
+            "text": ")"
+          },
+          {
+            "index": 4,
+            "text": "\\quad+10\\log_{10}(A_j)+D_j(\\theta)"
+          },
+          {
+            "index": 5,
+            "text": "+H_j(f)"
+          },
+          {
+            "index": 6,
+            "text": ""
+          },
+          {
+            "index": 7,
+            "text": "L_{fan,1m}=C_f+10\\log_{10}(\\dot m)"
+          },
+          {
+            "index": 8,
+            "text": "\\quad+40\\log_{10}(M_{tip})+D_f(\\th"
+          },
+          {
+            "index": 9,
+            "text": "eta)+H_f(f)"
+          },
+          {
+            "index": 10,
+            "text": ""
+          },
+          {
+            "index": 11,
+            "text": "L_{air,1m}=C_a+p\\log_{10}(V/c_0)"
+          },
+          {
+            "index": 12,
+            "text": "\\quad+G_a+D_a(\\theta)+H_a(f),\\quad"
+          },
+          {
+            "index": 13,
+            "text": "p\\in\\{50,60\\}"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "I_{jet}\\propto\\rho_j^2 A_j v_j^8",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "I_{jet}\\propto\\rho_j^2 A_j v_j^8",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "L_{jet,1m}=C_j+80\\log_{10}(v_j/c_0)",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "L_{jet,1m}=C_j+80\\log_{10}(v_j/c_0)",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 3,
+          "text": "\\quad+10\\log_{10}(A_j)+D_j(\\theta)+H_j(f)",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "\\quad+10\\log_{10}(A_j)+D_j(\\theta)+H_j(f)",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 5,
+          "text": "L_{fan,1m}=C_f+10\\log_{10}(\\dot m)",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "L_{fan,1m}=C_f+10\\log_{10}(\\dot m)",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 6,
+          "text": "\\quad+40\\log_{10}(M_{tip})+D_f(\\theta)+H_f(f)",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "\\quad+40\\log_{10}(M_{tip})+D_f(\\theta)+H_f(f)",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 8,
+          "text": "L_{air,1m}=C_a+p\\log_{10}(V/c_0)",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "L_{air,1m}=C_a+p\\log_{10}(V/c_0)",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 9,
+          "text": "\\quad+G_a+D_a(\\theta)+H_a(f),\\quad p\\in\\{50,60\\}",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "\\quad+G_a+D_a(\\theta)+H_a(f),\\quad p\\in\\{50,60\\}",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/w7ilcbah",
+      "id": "13",
+      "name": "latex-prop-text",
+      "bbox": [
+        481,
+        280,
+        318,
+        252
+      ],
+      "geometry": "rect",
+      "text": "r_k=\\frac{d}{\\sin\\theta_k},\\quad\nt_k=\\frac{-d\\cot\\theta_k}{V}\n\nL_i(f,r_k)=L_{i,1m}(f)\n-20\\log_{10}(r_k/1m)-\\alpha(f)r_k\n\nL_{A,k}^{(i)}=10\\log_{10}\\sum_f\n10^{[L_i(f,r_k)+A(f)]/10}\n\nL_A(t_k)=10\\log_{10}\\sum_i\n10^{L_{A,k}^{(i)}/10}",
+      "textPreview": "r_k=\\frac{d}{\\sin\\theta_k},\\quad | t_k=\\frac{-d\\cot\\theta_k}{V} |  | L_i(f,r_k)=L_{i,1m}(f) | -20\\log_{10}(r_k/1m)-\\alpha(f)r_k |  | L_{A...",
+      "resolvedFontSize": 15.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15.51,
+        "typeface": "Courier New",
+        "color": "#111111",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 11,
+        "lines": [
+          {
+            "index": 1,
+            "text": "r_k=\\frac{d}{\\sin\\theta_k},\\quad"
+          },
+          {
+            "index": 2,
+            "text": "t_k=\\frac{-d\\cot\\theta_k}{V}"
+          },
+          {
+            "index": 3,
+            "text": ""
+          },
+          {
+            "index": 4,
+            "text": "L_i(f,r_k)=L_{i,1m}(f)"
+          },
+          {
+            "index": 5,
+            "text": "-20\\log_{10}(r_k/1m)-\\alpha(f)r_k"
+          },
+          {
+            "index": 6,
+            "text": ""
+          },
+          {
+            "index": 7,
+            "text": "L_{A,k}^{(i)}=10\\log_{10}\\sum_f"
+          },
+          {
+            "index": 8,
+            "text": "10^{[L_i(f,r_k)+A(f)]/10}"
+          },
+          {
+            "index": 9,
+            "text": ""
+          },
+          {
+            "index": 10,
+            "text": "L_A(t_k)=10\\log_{10}\\sum_i"
+          },
+          {
+            "index": 11,
+            "text": "10^{L_{A,k}^{(i)}/10}"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "r_k=\\frac{d}{\\sin\\theta_k},\\quad",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "r_k=\\frac{d}{\\sin\\theta_k},\\quad",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "t_k=\\frac{-d\\cot\\theta_k}{V}",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "t_k=\\frac{-d\\cot\\theta_k}{V}",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 4,
+          "text": "L_i(f,r_k)=L_{i,1m}(f)",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "L_i(f,r_k)=L_{i,1m}(f)",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 5,
+          "text": "-20\\log_{10}(r_k/1m)-\\alpha(f)r_k",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "-20\\log_{10}(r_k/1m)-\\alpha(f)r_k",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 7,
+          "text": "L_{A,k}^{(i)}=10\\log_{10}\\sum_f",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "L_{A,k}^{(i)}=10\\log_{10}\\sum_f",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 8,
+          "text": "10^{[L_i(f,r_k)+A(f)]/10}",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "10^{[L_i(f,r_k)+A(f)]/10}",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 10,
+          "text": "L_A(t_k)=10\\log_{10}\\sum_i",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "L_A(t_k)=10\\log_{10}\\sum_i",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 11,
+          "text": "10^{L_{A,k}^{(i)}/10}",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "10^{L_{A,k}^{(i)}/10}",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7ipkz69k",
+      "id": "14",
+      "name": "latex-compare-text",
+      "bbox": [
+        880,
+        280,
+        318,
+        252
+      ],
+      "geometry": "rect",
+      "text": "L_{A,max}=\\max_k L_A(t_k)\n\nSEL=10\\log_{10}\\left[\\frac{1}{1s}\n\\int 10^{L_A(t)/10}dt\\right]\n\ne_{phys}=y_{phys}-y_{ANP}\ne_{ET}=y_{ET}-y_{ANP}\n\nRMSE=\\sqrt{\\frac{1}{n}\\sum e_i^2}\n\\quad bias=\\frac{1}{n}\\sum e_i",
+      "textPreview": "L_{A,max}=\\max_k L_A(t_k) |  | SEL=10\\log_{10}\\left[\\frac{1}{1s} | \\int 10^{L_A(t)/10}dt\\right] |  | e_{phys}=y_{phys}-y_{ANP} | e_{ET}=y...",
+      "resolvedFontSize": 15.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15.51,
+        "typeface": "Courier New",
+        "color": "#111111",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 10,
+        "lines": [
+          {
+            "index": 1,
+            "text": "L_{A,max}=\\max_k L_A(t_k)"
+          },
+          {
+            "index": 2,
+            "text": ""
+          },
+          {
+            "index": 3,
+            "text": "SEL=10\\log_{10}\\left[\\frac{1}{1s}"
+          },
+          {
+            "index": 4,
+            "text": "\\int 10^{L_A(t)/10}dt\\right]"
+          },
+          {
+            "index": 5,
+            "text": ""
+          },
+          {
+            "index": 6,
+            "text": "e_{phys}=y_{phys}-y_{ANP}"
+          },
+          {
+            "index": 7,
+            "text": "e_{ET}=y_{ET}-y_{ANP}"
+          },
+          {
+            "index": 8,
+            "text": ""
+          },
+          {
+            "index": 9,
+            "text": "RMSE=\\sqrt{\\frac{1}{n}\\sum e_i^2}"
+          },
+          {
+            "index": 10,
+            "text": "\\quad bias=\\frac{1}{n}\\sum e_i"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "L_{A,max}=\\max_k L_A(t_k)",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "L_{A,max}=\\max_k L_A(t_k)",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 3,
+          "text": "SEL=10\\log_{10}\\left[\\frac{1}{1s}",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SEL=10\\log_{10}\\left[\\frac{1}{1s}",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 4,
+          "text": "\\int 10^{L_A(t)/10}dt\\right]",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "\\int 10^{L_A(t)/10}dt\\right]",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 6,
+          "text": "e_{phys}=y_{phys}-y_{ANP}",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "e_{phys}=y_{phys}-y_{ANP}",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 7,
+          "text": "e_{ET}=y_{ET}-y_{ANP}",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "e_{ET}=y_{ET}-y_{ANP}",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 9,
+          "text": "RMSE=\\sqrt{\\frac{1}{n}\\sum e_i^2}",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "RMSE=\\sqrt{\\frac{1}{n}\\sum e_i^2}",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 10,
+          "text": "\\quad bias=\\frac{1}{n}\\sum e_i",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "typeface": "Courier New",
+            "color": "#111111",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "\\quad bias=\\frac{1}{n}\\sum e_i",
+              "fontSize": 15.51,
+              "typeface": "Courier New",
+              "color": "#111111",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mhg361sf",
+      "id": "15",
+      "name": "latex-foot",
+      "bbox": [
+        88,
+        606,
+        1104,
+        28
+      ],
+      "geometry": "rect",
+      "text": "A320-211 at 1,000 ft: ANP = 96.40 / 88.90 dB, ET = 96.40 / 88.90 dB, physics = 97.27 / 87.27 dB (SEL / LAmax).",
+      "textPreview": "A320-211 at 1,000 ft: ANP = 96.40 / 88.90 dB, ET = 96.40 / 88.90 dB, physics = 97.27 / 87.27 dB (SEL / LAmax).",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Arial",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "A320-211 at 1,000 ft: ANP = 96.40 / 88.90 dB, ET = 96.40 / 88.90 dB, physics = 97.27 / 87.27 dB (SEL / LAmax)."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "A320-211 at 1,000 ft: ANP = 96.40 / 88.90 dB, ET = 96.40 / 88.90 dB, physics = 97.27 / 87.27 dB (SEL / LAmax).",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Arial",
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "A320-211 at 1,000 ft: ANP = 96.40 / 88.90 dB, ET = 96.40 / 88.90 dB, physics = 97.27 / 87.27 dB (SEL / LAmax).",
+              "fontSize": 18,
+              "typeface": "Arial",
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

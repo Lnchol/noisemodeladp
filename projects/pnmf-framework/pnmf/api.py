@@ -117,6 +117,30 @@ class NoisePrediction:
                 out[metric] = float(np.mean(np.concatenate(deltas)))
         return out
 
+    def physics_diagnostics(self, design, thrust_per_engine_lbf, op_mode,
+                            distance_ft):
+        """Run one inspectable event through the independently calibrated
+        component-physics route.
+
+        ``design`` is a :class:`PhysicsDesign`; learned-model tables are not
+        used as inputs. They may be compared with the returned diagnostics by
+        a caller, but the two prediction routes remain independently fitted.
+        """
+        if self._predictor is None:
+            raise RuntimeError(
+                "physics diagnostics require a prediction created by "
+                "NoisePredictor")
+        return self._predictor._calibrated_physics().single_event_diagnostics(
+            design, thrust_per_engine_lbf, op_mode, distance_ft)
+
+    def physics_table(self, design, metric, op_mode, power_settings_lbf):
+        """Emit a component-physics NPD table using the frozen calibration."""
+        if self._predictor is None:
+            raise RuntimeError(
+                "physics tables require a prediction created by NoisePredictor")
+        return self._predictor._calibrated_physics().predict_table(
+            design, metric, op_mode, power_settings_lbf)
+
 
 class NoisePredictor:
     """One-call NPD noise predictor. Fits the winning model for every
@@ -161,7 +185,8 @@ class NoisePredictor:
         return out, None
 
     def predict(self, aircraft: ParametricAircraft | None = None,
-                power_settings=None, **kwargs) -> NoisePrediction:
+                power_settings=None, progress_callback=None,
+                **kwargs) -> NoisePrediction:
         """Predict NPD tables for all fitted metric/op combinations.
 
         aircraft: a ParametricAircraft, or pass its fields as **kwargs.
@@ -171,20 +196,42 @@ class NoisePredictor:
         supplies separate departure/approach grids. Missing mapping entries
         use that mode's existing default grid. Every selected grid is
         canonicalized to finite, positive, unique ascending floats before
-        learned prediction."""
+        learned prediction.
+
+        ``progress_callback`` is an optional read-only UI/CLI hook receiving
+        ``(event_name, details_dict)`` before and after each metric/operation
+        table. It does not affect model inputs or results."""
         if aircraft is None:
             aircraft = ParametricAircraft(**kwargs)
         tables, unc = {}, {}
-        for metric, om in self._combos:
+        total = len(self._combos)
+        for index, (metric, om) in enumerate(self._combos, start=1):
             requested = (power_settings.get(om)
                          if isinstance(power_settings, Mapping)
                          else power_settings)
             P = canonical_power_grid(
                 self._default_power(aircraft, om)
                 if requested is None else requested)
+            details = {
+                "index": index, "total": total, "metric": metric,
+                "op_mode": om, "powers_lbf": P.tolist(),
+            }
+            if progress_callback is not None:
+                progress_callback("combo_start", details)
             tbl, std = self._predict_one(aircraft, metric, om, P)
             tables[(metric, om)] = tbl
             unc[(metric, om)] = std
+            if progress_callback is not None:
+                progress_callback("combo_done", {
+                    **details,
+                    "rows": int(len(tbl.P)),
+                    "distances": int(tbl.L.shape[1]),
+                    "uncertainty": std is not None,
+                })
+        if progress_callback is not None:
+            progress_callback(
+                "prediction_done",
+                {"tables": len(tables), "aircraft": aircraft.name})
         return NoisePrediction(aircraft, tables, unc, _predictor=self)
 
     def _calibrated_physics(self):

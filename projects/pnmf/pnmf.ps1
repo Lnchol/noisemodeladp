@@ -2,8 +2,17 @@
 # Usage: .\pnmf.ps1 [task] [args...]
 # With no task, PNMF creates/updates its local .venv and launches the web UI.
 
+[CmdletBinding()]
 param(
+    [Parameter(Position = 0)]
     [string]$Task = "ui",
+    [string]$Destination,
+    [string]$SourceZip,
+    [string]$ExtractTo,
+    [switch]$Extract,
+    [switch]$IncludeData,
+    [switch]$ExcludeData,
+    [switch]$Force,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
 
@@ -31,6 +40,9 @@ function Show-Usage {
     Write-Host "  subs      - external check vs the 19.5k-aircraft substitution table"
     Write-Host "  datastore - build anp_data.sqlite from staged ANP CSVs (one-time)"
     Write-Host "  predict   - predict + QA-gate + store NPD tables for a future aircraft"
+    Write-Host "  zip       - adaptively package framework + data SQL into .zip archive"
+    Write-Host "  export    - alias for zip"
+    Write-Host "  extract   - adaptively extract framework .zip archive"
     Write-Host "  ui        - launch the local web UI (Streamlit, http://localhost:8501)"
 }
 
@@ -128,6 +140,35 @@ switch ($Task) {
     { $_ -in "physics", "demo", "compare", "datastore", "manifest", "predict" } {
         Install-PnmfEnvironment
         & $PythonExe $Cli $Task @Rest
+    }
+    { $_ -in "zip", "export" } {
+        $zipArgs = @{}
+        if (-not [string]::IsNullOrWhiteSpace($Destination)) { $zipArgs["Destination"] = $Destination }
+        if (-not [string]::IsNullOrWhiteSpace($SourceZip)) { $zipArgs["SourceZip"] = $SourceZip }
+        if (-not [string]::IsNullOrWhiteSpace($ExtractTo)) { $zipArgs["ExtractTo"] = $ExtractTo }
+        if ($Extract) { $zipArgs["Extract"] = $true }
+        if ($IncludeData) { $zipArgs["IncludeData"] = $true }
+        if ($ExcludeData) { $zipArgs["ExcludeData"] = $true }
+        if ($Force) { $zipArgs["Force"] = $true }
+        if ($null -ne $Rest -and $Rest.Count -gt 0) {
+            & (Join-Path $PSScriptRoot "tools/export_framework_zip.ps1") @zipArgs @Rest
+        } else {
+            & (Join-Path $PSScriptRoot "tools/export_framework_zip.ps1") @zipArgs
+        }
+    }
+    "extract" {
+        $zipArgs = @{"Extract" = $true}
+        if (-not [string]::IsNullOrWhiteSpace($Destination)) { $zipArgs["Destination"] = $Destination }
+        if (-not [string]::IsNullOrWhiteSpace($SourceZip)) { $zipArgs["SourceZip"] = $SourceZip }
+        if (-not [string]::IsNullOrWhiteSpace($ExtractTo)) { $zipArgs["ExtractTo"] = $ExtractTo }
+        if ($IncludeData) { $zipArgs["IncludeData"] = $true }
+        if ($ExcludeData) { $zipArgs["ExcludeData"] = $true }
+        if ($Force) { $zipArgs["Force"] = $true }
+        if ($null -ne $Rest -and $Rest.Count -gt 0) {
+            & (Join-Path $PSScriptRoot "tools/export_framework_zip.ps1") @zipArgs @Rest
+        } else {
+            & (Join-Path $PSScriptRoot "tools/export_framework_zip.ps1") @zipArgs
+        }
     }
     "ui" {
         Install-PnmfEnvironment

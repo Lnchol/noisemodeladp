@@ -23,7 +23,16 @@ from .core import NPDTable, STANDARD_DISTANCES_FT
 from .models import SurrogateNPDModel
 from .operations import OperationalProfile
 from .operations import DepartureSynthesizer
-from .physics import PhysicsNPDModel, PhysicsDesign
+from .physics import (
+    AirframePhysicalInputs,
+    AtmosphericPhysicalInputs,
+    EnginePhysicalInputs,
+    EventDiagnostics,
+    FlightTrajectoryInputs,
+    PhysicalInput,
+    PhysicsDesign,
+    PhysicsNPDModel,
+)
 from .api import NoisePredictor, NoisePrediction
 
 __all__ = [
@@ -36,6 +45,12 @@ __all__ = [
     "DepartureSynthesizer",
     "PhysicsNPDModel",
     "PhysicsDesign",
+    "PhysicalInput",
+    "EnginePhysicalInputs",
+    "AirframePhysicalInputs",
+    "AtmosphericPhysicalInputs",
+    "FlightTrajectoryInputs",
+    "EventDiagnostics",
     "NoisePredictor",
     "NoisePrediction",
 ]

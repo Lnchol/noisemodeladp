@@ -9,6 +9,7 @@ Commands:
   validate  LOO validation of the supported ET and RF learned models
   validate-model reproducible aircraft-grouped + temporal ET/RF validation
   validate-jet-reference frozen representative Jet ET/RF holdout
+  validate-serdp09 explicit-root case-844 physics-reference diagnostic
   physics   physics-route calibration + fleet validation + BPR sweep
   demo      end-to-end demo: generate NPD, validate, synthesize, sideline
   compare   LOO bake-off of Extra Trees and Random Forest
@@ -280,6 +281,132 @@ def cmd_validate_jet_reference():
     from pnmf.jet_reference_validation import main
 
     raise SystemExit(main(sys.argv[1:]))
+
+
+def cmd_validate_serdp09():
+    """Write a local case-844 diagnostic; --data-root must be absolute."""
+    import argparse
+    from dataclasses import asdict
+    import hashlib
+    import json
+
+    from openpyxl import load_workbook
+
+    from pnmf import serdp09_reference
+    from pnmf.serdp09_reference import Serdp09ReferenceError, evaluate_case, load_case
+
+    parser = argparse.ArgumentParser(description=cmd_validate_serdp09.__doc__)
+    parser.add_argument(
+        "--data-root",
+        help="absolute path to the local SERDP09 archive; no default is used",
+    )
+    args = parser.parse_args()
+    report = {
+        "command": "validate-serdp09",
+        "case_id": 844,
+        "data_root": args.data_root,
+        "report_path": None,
+        "verdict": "incompatible",
+        "reasons": [],
+        "evaluation": None,
+    }
+    if args.data_root is None:
+        report["reasons"] = ["--data-root must be provided"]
+        print(json.dumps(report, sort_keys=True))
+        raise SystemExit(2)
+    root = Path(args.data_root)
+    if not root.is_absolute():
+        report["reasons"] = ["--data-root must be an absolute path"]
+        print(json.dumps(report, sort_keys=True))
+        raise SystemExit(2)
+    root = root.resolve()
+    report["data_root"] = str(root)
+    if not root.is_dir():
+        report["reasons"] = ["archive root does not exist"]
+        print(json.dumps(report, sort_keys=True))
+        raise SystemExit(2)
+    report_path = root / "serdp09_case_844_report.json"
+    report["report_path"] = str(report_path)
+    workbook_path = root / serdp09_reference.WORKBOOK_NAME
+    spectrum_path = root / "844_nb" / "844_nb.dat"
+    hardware_path = root / "SERDP09TestReqtsV3.8.doc"
+    source_paths = (workbook_path, spectrum_path, hardware_path)
+    report["sources"] = []
+    for path in source_paths:
+        if path.is_file():
+            with path.open("rb") as source_file:
+                report["sources"].append({
+                    "name": path.relative_to(root).as_posix(),
+                    "sha256": hashlib.file_digest(source_file, "sha256").hexdigest(),
+                })
+    report["selected_workbook_fields"] = {}
+    if workbook_path.is_file():
+        try:
+            workbook = load_workbook(workbook_path, read_only=True, data_only=True)
+            try:
+                sheet = workbook[serdp09_reference.SHEET_NAME]
+                rows = sheet.iter_rows(values_only=True)
+                columns = tuple(str(value).strip() for value in next(rows, ()))
+                selected = [row for row in rows if row[columns.index("icrdg")] == 844]
+                if len(selected) == 1:
+                    report["selected_workbook_fields"] = {
+                        column: str(value)
+                        for column, value in zip(columns, selected[0])
+                    }
+            finally:
+                workbook.close()
+        except (KeyError, OSError, ValueError):
+            pass
+    fields = report["selected_workbook_fields"]
+    missing_proofs = [
+        reason
+        for proof, reason in (
+            ("stream_mapping_proof", "missing proven core/bypass-to-outer/merged mapping"),
+            ("frequency_basis_proof", "missing proven model-scale frequency basis"),
+        )
+        if fields.get(proof, "").strip().lower() != "proven"
+    ]
+    excluded_angles = []
+    if spectrum_path.is_file():
+        try:
+            rows = spectrum_path.read_text(encoding="utf-8").splitlines()
+            zone = next(index for index, line in enumerate(rows) if line.upper().startswith("ZONE"))
+            excluded_angles = sorted({
+                float(parts[1])
+                for line in rows[zone + 1:]
+                if len(parts := line.split()) == 3 and all(
+                    _part.replace(".", "", 1).replace("-", "", 1).isdigit()
+                    for _part in parts
+                )
+            })
+        except (OSError, StopIteration, UnicodeDecodeError):
+            pass
+    report["valid_angles_deg"] = []
+    report["excluded_angles_deg"] = excluded_angles
+    report["third_octave_bands_hz"] = {"status": "excluded" if excluded_angles else "unknown", "values": []}
+    report["fixed_parameters"] = dict(serdp09_reference._FIXED_JET_PARAMETERS)
+    report["normalization_order"] = list(serdp09_reference._NORMALIZATION_ORDER)
+    report["exclusions"] = list(serdp09_reference._EXCLUSIONS)
+    report["limitation"] = "Conceptual screening only; not certification."
+    try:
+        case = load_case(root, 844)
+        evaluation = evaluate_case(case)
+    except Serdp09ReferenceError as error:
+        report["reasons"] = [str(error), *missing_proofs]
+    else:
+        report["verdict"] = evaluation.verdict
+        report["reasons"] = list(evaluation.reasons)
+        report["evaluation"] = asdict(evaluation)
+        report["valid_angles_deg"] = list(case.angles_deg)
+        report["excluded_angles_deg"] = []
+        report["third_octave_bands_hz"] = {
+            "status": "integrated",
+            "values": serdp09_reference.THIRD_OCTAVE_HZ.tolist(),
+        }
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+    print(json.dumps(report, sort_keys=True))
+    if report["verdict"] != "compatible":
+        raise SystemExit(1)
 
 
 
@@ -905,6 +1032,7 @@ COMMANDS = {
     "validate": cmd_validate,
     "validate-model": cmd_validate_model,
     "validate-jet-reference": cmd_validate_jet_reference,
+    "validate-serdp09": cmd_validate_serdp09,
     "physics": cmd_physics,
     "demo": cmd_demo,
     "compare": cmd_compare,

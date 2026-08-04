@@ -1,0 +1,12 @@
+﻿ACFT_ID,Description,Engine Type,Number Of Engines,Weight Class,Owner Category,Max Gross Takeoff Weight (lb),Max Gross Landing Weight (lb),Max Landing Distance (ft),Max Sea Level Static Thrust (lb),Noise Chapter,NPD_ID,Power Parameter,Approach Spectral Class ID,Departure Spectral Class ID,Lateral Directivity Identifier
+A320-270N,Airbus A320-270N / PW1120G-JM,Jet,2,Large,Commercial,174165,148591,5042.6,26700,14,A320-270N,CNT (lb),201,107,Wing
+A321-270N,Airbus A321-270N / PW1130G-JM,Jet,2,Large,Commercial,213848,174606,5318,33110,14,A321-270N,CNT (lb),242,142,Wing
+A330-743L,Airbus A330-743L / RR Trent 772B,Jet,2,Heavy,Commercial,500449,412264,5823.5,71100,14,A330-743L,CNT (lb),244,144,Wing
+A350-1041,Airbus A350-1041 / RR Trent XWB-97,Jet,2,Heavy,Commercial,696661,520291,6949,97000,14,A350-1041,CNT (lb),246,146,Wing
+747400RN,Boeing 747400RN / PW4062A,Jet,4,Heavy,Commercial,875000,652000,6850,59708,3,747400RN,CNT (lb),245,145,Wing
+7673ER,Boeing 767-300ER / CF6-80C2B6F,Jet,2,Heavy,Commercial,412000,320000,5464,61500,4,7673ER,CNT (lb),205,105,Wing
+7773ER,Boeing 777-300ER / GE90-115B,Jet,2,Heavy,Commercial,775000,554000,5805,115000,4,7773ER,CNT (lb),241,141,Wing
+7879,Boeing 787-9 / Genx-1B76A,Jet,2,Heavy,Commercial,560000,425000,5388,76000,4,7879,CNT (lb),243,143,Wing
+ERJ190-300,ERJ 190-300 / PW1900G,Jet,2,Large,Commercial,124341,108137,4434.7,21300,14,ERJ190-300,CNT (lb),247,147,Wing
+ERJ190-400,ERJ 190-400 / PW1900G,Jet,2,Large,Commercial,135584,119049,4715,21300,14,ERJ190-400,CNT (lb),247,147,Wing
+FAL900EX,Dassault FAL900EX / TFE731-60,Jet,3,Large,General Aviation,49000,44500,3900,5000,4,FAL900EX,CNT (lb),206,107,Fuselage

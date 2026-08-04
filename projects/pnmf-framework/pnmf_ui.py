@@ -2,10 +2,10 @@
 real-vs-future comparison, on top of the existing pnmf public API.
 
 Launched via `.\\pnmf.ps1 ui` (streamlit run pnmf_ui.py); fully offline.
-This module implements the shared skeleton, the Aircraft Designer page and
-the Comparison page. The Results / Physics / Operations / Fleet pages are
-stubs filled by a later build step; the session-state contract they rely on
-lives here (keys: prediction, pred_meta, crosscheck, and the f_* widgets).
+The application includes aircraft design, learned prediction/results,
+real-aircraft comparison, direct component physics, operations and fleet
+inspection. Session state keeps the active prediction, physics diagnostics
+and form inputs across Streamlit reruns.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import io
 import os
 import re
 import sqlite3
+import time
 from pathlib import Path
 
 import matplotlib
@@ -29,11 +30,66 @@ from pnmf.core import (ParametricAircraft, NPDTable,
 from pnmf.anp import DIST_COLS, ANPDatabase, qa_check, PredictionStore
 from pnmf.operations import DepartureSynthesizer
 from pnmf.models import rank_models
+from pnmf.physics import (
+    AirframePhysicalInputs,
+    AtmosphericPhysicalInputs,
+    EnginePhysicalInputs,
+    InputStatus,
+    PhysicalInput,
+    PhysicsDesign,
+)
+from pnmf.physics_presets import PHYSICS_PRESETS
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 os.chdir(PROJECT_ROOT)
 DB_PATH = str(PROJECT_ROOT / "anp_data.sqlite")
 MODELS = ["et", "rf"]
+
+
+def _render_calculation_log(slot, record):
+    """Render a compact operation trace in a stable placeholder."""
+    with slot.container():
+        state = record.get("state", "running")
+        marker = {"running": "running", "complete": "complete",
+                  "error": "failed"}.get(state, state)
+        st.caption(f"Calculation log · {record['title']} · {marker}")
+        st.code("\n".join(record["entries"]) or "Waiting for operations…",
+                language="text")
+
+
+class _CalculationLog:
+    """Live Streamlit trace persisted in session state after completion."""
+
+    def __init__(self, key, title, slot):
+        self.key = key
+        self.slot = slot
+        self.started = time.perf_counter()
+        self.record = {
+            "title": title, "state": "running", "entries": []}
+        st.session_state.setdefault("calculation_logs", {})[key] = self.record
+        self.add("START", "Calculation request accepted")
+
+    def add(self, operation, detail):
+        elapsed = time.perf_counter() - self.started
+        self.record["entries"].append(
+            f"[{elapsed:7.2f}s] {operation:<12} {detail}")
+        _render_calculation_log(self.slot, self.record)
+
+    def finish(self, detail):
+        self.add("DONE", detail)
+        self.record["state"] = "complete"
+        _render_calculation_log(self.slot, self.record)
+
+    def fail(self, detail):
+        self.add("ERROR", detail)
+        self.record["state"] = "error"
+        _render_calculation_log(self.slot, self.record)
+
+
+def _render_saved_calculation_log(key, slot):
+    record = st.session_state.get("calculation_logs", {}).get(key)
+    if record is not None:
+        _render_calculation_log(slot, record)
 FUTURE_COLOR = "#c53030"         # strong highlight for the future aircraft
 
 MODEL_INFO = {
@@ -298,7 +354,7 @@ def _require_prediction():
     Also warns when the prediction is stale versus the current data version."""
     pred = st.session_state.get("prediction")
     if pred is None:
-        st.info("Design an aircraft and press **Predict** first.")
+        st.info("Design an aircraft and press the analysis button first.")
         return None
     meta = st.session_state.get("pred_meta", {})
     try:
@@ -307,7 +363,7 @@ def _require_prediction():
         cur = None
     if meta.get("version") and cur and meta["version"] != cur:
         st.warning("The datastore changed since this prediction was made — "
-                   "re-run **Predict** on the Aircraft Designer for "
+                   "re-run the analysis on **Aircraft Designer** for "
                    "up-to-date results.")
     return pred
 
@@ -318,6 +374,43 @@ def _require_prediction():
 
 _OPTIONAL_KEYS = ("f_bpr", "f_fan_d", "f_fan_mach", "f_wing_area",
                   "f_wing_span", "f_gear_wheels")
+ANALYSIS_APPROACHES = (
+    "Compare learned + physics",
+    "Learned ET/RF only",
+    "Component physics only",
+)
+
+
+def _apply_shared_aircraft_preset():
+    """Apply one v6.3 aircraft definition to both independent model routes."""
+    key = st.session_state.get("f_aircraft_preset", "__custom__")
+    if key == "__custom__":
+        st.session_state.pop("phys_active_preset", None)
+        st.session_state.pop("physics_result", None)
+        st.session_state.pop("calculation_logs", None)
+        return
+
+    preset = PHYSICS_PRESETS[key]
+    ac = _preset_aircraft(preset)
+    st.session_state["phys_active_preset"] = key
+    st.session_state["f_name"] = ac.name
+    st.session_state["f_engine_type"] = ac.engine_type
+    st.session_state["f_n_engines"] = ac.n_engines
+    st.session_state["f_thrust"] = ac.max_static_thrust_lb
+    st.session_state["f_mtow"] = ac.mtow_lb
+    st.session_state["f_mlw"] = ac.mlw_lb
+    st.session_state["f_chapter"] = ac.noise_chapter
+    st.session_state["f_bpr"] = ac.bypass_ratio
+    st.session_state["f_fan_d"] = ac.fan_diameter_m
+    st.session_state["f_fan_mach"] = None
+    st.session_state["f_wing_area"] = ac.wing_area_m2
+    st.session_state["f_wing_span"] = ac.wing_span_m
+    st.session_state["f_gear_wheels"] = ac.n_main_gear_wheels
+    _apply_physics_preset_values(preset)
+    _clear_unit_shadows()
+    st.session_state.pop("prediction", None)
+    st.session_state.pop("pred_meta", None)
+    st.session_state.pop("calculation_logs", None)
 
 def _apply_prefill():
     """Fill the form from a real ANP aircraft row (name suffixed -DERIVED)."""
@@ -341,6 +434,10 @@ def _apply_prefill():
     # from_anp_row leaves the richer geometry/cycle fields unset
     for k in _OPTIONAL_KEYS:
         st.session_state[k] = None
+    st.session_state["f_aircraft_preset"] = "__custom__"
+    st.session_state.pop("phys_active_preset", None)
+    st.session_state.pop("physics_result", None)
+    st.session_state.pop("calculation_logs", None)
     _clear_unit_shadows()
 
 
@@ -360,6 +457,9 @@ def _init_designer_state():
     st.session_state.setdefault("f_model", DEFAULT_MODEL)
     st.session_state.setdefault("f_departure_powers", "")
     st.session_state.setdefault("f_approach_powers", "")
+    st.session_state.setdefault("f_aircraft_preset", "__custom__")
+    st.session_state.setdefault(
+        "f_analysis_approach", ANALYSIS_APPROACHES[0])
 
 
 def _custom_power_settings_from_state():
@@ -380,8 +480,48 @@ def page_designer():
     _init_designer_state()
     version = data_version()
     st.header("Aircraft design")
-    st.caption("Enter the basic aircraft parameters, then generate its "
-               "NPD-equivalent noise tables.")
+    st.caption(
+        "Choose one aircraft definition, then use that same aircraft for the "
+        "learned ET/RF route, component physics, or a direct comparison.")
+
+    st.subheader("1. Shared aircraft")
+    preset_options = ["__custom__", *PHYSICS_PRESETS]
+    p1, p2 = st.columns([3, 1])
+    with p1:
+        st.selectbox(
+            "Aircraft preset",
+            preset_options,
+            format_func=lambda key: (
+                "Custom aircraft"
+                if key == "__custom__" else PHYSICS_PRESETS[key].label),
+            key="f_aircraft_preset",
+            help="A selected v6.3 preset populates one shared aircraft input "
+                 "for both independent model routes.")
+    with p2:
+        st.button(
+            "Apply to both models",
+            on_click=_apply_shared_aircraft_preset,
+            width="stretch")
+
+    active_preset = _matching_active_preset(_aircraft_from_state())
+    if active_preset is not None:
+        st.success(
+            f"Shared aircraft: **{active_preset.label}**. ET/RF and component "
+            "physics will use this same aircraft definition.")
+        with st.expander("Preset sources and estimated fields"):
+            for source in active_preset.sources:
+                fields = ", ".join(
+                    field.replace("_", " ") for field in source.fields)
+                st.markdown(f"- [{source.title}]({source.url}) — {fields}")
+            st.caption(
+                "MTOW, MLW, thrust and engine count come from local v6.3. "
+                "Wing area is estimated as span²/9; incomplete high-lift, "
+                "strut and wheel geometry remains editable and estimated.")
+    elif st.session_state.get("phys_active_preset") is not None:
+        st.warning(
+            "The preset values were edited. Both routes will use the edited "
+            "shared aircraft, but edited fields are no longer labelled as "
+            "manufacturer-supplied preset values.")
 
     with st.expander("Start from a real aircraft (optional)"):
         labels = list(_label_map(get_param_table(version)))
@@ -456,6 +596,24 @@ def page_designer():
     _render_input_health(version)
 
     st.divider()
+    st.subheader("2. Choose analysis approach")
+    approach = st.radio(
+        "Analysis approach",
+        ANALYSIS_APPROACHES,
+        horizontal=True,
+        key="f_analysis_approach",
+        help="Compare mode overlays independent ET/RF and component-physics "
+             "noise results for the same aircraft and event.")
+    if approach == "Learned ET/RF only":
+        st.info("Runs the selected tree model and produces NPD tables.")
+    elif approach == "Component physics only":
+        st.info(
+            "Runs the component-source route for SEL/LAmax without displaying "
+            "a learned-model overlay.")
+    else:
+        st.info(
+            "Runs ET/RF first, then exposes component-physics event inputs and "
+            "a same-aircraft noise comparison below.")
 
     # ---- advanced prediction settings -----------------------------------
     with st.expander("Advanced prediction settings"):
@@ -478,16 +636,84 @@ def page_designer():
         st.text_input(f"Approach powers [{power_unit}]", key="f_approach_powers",
                       placeholder=app_example)
 
-    if st.button("Predict", type="primary", width="stretch"):
+    run_label = {
+        "Learned ET/RF only": "Run learned prediction",
+        "Component physics only": "Prepare component physics",
+        "Compare learned + physics": "Run learned model and prepare comparison",
+    }[approach]
+    run_clicked = st.button(run_label, type="primary", width="stretch")
+    learned_log_slot = st.empty()
+    if run_clicked:
         ac = _aircraft_from_state()
         model = st.session_state["f_model"]
+        st.session_state.setdefault("calculation_logs", {}).pop(
+            "physics", None)
+        calc_log = _CalculationLog(
+            "learned",
+            f"{model.upper()} aircraft analysis",
+            learned_log_slot)
+        calc_log.add(
+            "AIRCRAFT",
+            f"{ac.name}; engines={ac.n_engines}; "
+            f"thrust={ac.max_static_thrust_lb:,.0f} lb/engine; "
+            f"MTOW={ac.mtow_lb:,.0f} lb")
+        if approach != "Learned ET/RF only":
+            _sync_physics_widgets_from_aircraft(
+                ac, _matching_active_preset(ac))
+            calc_log.add(
+                "PHYSICS LINK",
+                "Copied the shared aircraft into component-physics inputs")
         try:
+            power_settings = _custom_power_settings_from_state()
+            power_note = "; ".join(
+                f"{mode}={'automatic' if powers is None else list(powers)}"
+                for mode, powers in power_settings.items())
+            calc_log.add(
+                "POWER GRID",
+                f"Canonicalize corrected net thrust rows: {power_note}")
+            calc_log.add(
+                "MODEL CACHE",
+                f"Resolve `{model}` predictor for datastore {version}; "
+                "fit the merged ANP corpus on cache miss")
             with st.spinner(f"Fitting `{model}` on the ANP fleet and "
                             f"predicting…"):
                 predictor = get_predictor(model, version)
+                calc_log.add(
+                    "FEATURES",
+                    "Build aircraft descriptors plus log10(power/engine) "
+                    "and throttle features")
+
+                def report_progress(event, details):
+                    if event == "combo_start":
+                        powers = ", ".join(
+                            f"{value:,.0f}"
+                            for value in details["powers_lbf"])
+                        calc_log.add(
+                            "MODEL TABLE",
+                            f"{details['index']}/{details['total']} "
+                            f"{details['metric']}/{details['op_mode']} at "
+                            f"[{powers}] lb/engine")
+                    elif event == "combo_done":
+                        uncertainty = (
+                            "tree dispersion calculated"
+                            if details["uncertainty"]
+                            else "no dispersion output")
+                        calc_log.add(
+                            "TABLE READY",
+                            f"{details['metric']}/{details['op_mode']}: "
+                            f"{details['rows']} power rows × "
+                            f"{details['distances']} distances; {uncertainty}")
+                    elif event == "prediction_done":
+                        calc_log.add(
+                            "OUTPUT",
+                            f"{details['tables']} monotone NPD tables "
+                            "assembled")
+
                 pred = predictor.predict(
-                    ac, power_settings=_custom_power_settings_from_state())
+                    ac, power_settings=power_settings,
+                    progress_callback=report_progress)
         except (RuntimeError, ValueError) as e:
+            calc_log.fail(str(e))
             st.error(f"Model `{model}` is unavailable: {e}")
         else:
             st.session_state["prediction"] = pred
@@ -495,18 +721,38 @@ def page_designer():
                 "model": model, "version": version,
                 "aircraft": ac.to_dict(), "name": ac.name}
             st.session_state.pop("crosscheck", None)   # stale on new predict
-            st.success("Prediction ready — open **Prediction results** or "
-                       "**Comparison** from the sidebar.")
+            st.session_state.pop("physics_result", None)
+            calc_log.finish(
+                f"Aircraft analysis prepared with {len(pred.tables)} tables")
+            if approach == "Learned ET/RF only":
+                st.success(
+                    "Learned prediction ready. Detailed tables remain "
+                    "available under **Prediction results**.")
+            elif approach == "Component physics only":
+                st.success(
+                    "Shared aircraft ready. Set the physics event below and "
+                    "run the component model.")
+            else:
+                st.success(
+                    "Learned prediction ready. Set the matching physics event "
+                    "below to compare both routes.")
+    else:
+        _render_saved_calculation_log("learned", learned_log_slot)
 
     # ---- persistent last-prediction summary -----------------------------
     if "prediction" in st.session_state:
         meta = st.session_state["pred_meta"]
         st.divider()
-        st.caption("Last prediction")
+        st.caption("Current shared-aircraft analysis")
         m1, m2, m3 = st.columns(3)
         m1.metric("Aircraft", meta["name"])
         m2.metric("Model", meta["model"])
         m3.metric("Tables", len(st.session_state["prediction"].tables))
+        if approach != "Learned ET/RF only":
+            st.divider()
+            page_physics(
+                embedded=True,
+                compare_learned=(approach == "Compare learned + physics"))
 
 
 def _render_input_health(version: str):
@@ -885,69 +1131,791 @@ def page_results():
 # Page: Physics cross-check
 # ===========================================================================
 
-def page_physics():
+def _physical(value, status, note):
+    """Short constructor used by the physics UI's provenance-aware inputs."""
+    return PhysicalInput(value, status, note)
+
+
+def _apply_physics_preset_values(preset):
+    """Populate physics widgets from the aircraft shared by both routes."""
+    area = preset.estimated_wing_area_m2
+    st.session_state["phys_bpr"] = float(preset.bpr)
+    st.session_state["phys_thrust_imperial"] = (
+        0.85 * preset.max_thrust_lbf)
+    st.session_state["phys_thrust_metric"] = lbf_to_kn(
+        0.85 * preset.max_thrust_lbf)
+    st.session_state["phys_wing_area"] = area
+    st.session_state["phys_wing_span"] = preset.wing_span_m
+    st.session_state["phys_flap_area"] = 0.17 * area
+    st.session_state["phys_slat_area"] = 0.08 * area
+    st.session_state["phys_nose_wheels"] = preset.nose_wheel_count
+    st.session_state["phys_main_wheels"] = preset.main_wheel_count
+    st.session_state["phys_nose_wheel_d"] = (
+        preset.nose_wheel_diameter_m)
+    st.session_state["phys_main_wheel_d"] = (
+        preset.main_wheel_diameter_m)
+    st.session_state["phys_fan_diameter_basic"] = preset.fan_diameter_m
+    st.session_state["phys_fan_blades_basic"] = preset.fan_blades
+    st.session_state["phys_airframe_supplied"] = False
+    st.session_state["phys_use_engine_detail"] = False
+    st.session_state.pop("physics_result", None)
+
+
+def _sync_physics_widgets_from_aircraft(ac, preset=None):
+    """Reseed physics geometry whenever the shared aircraft analysis changes."""
+    area = float(
+        ac.wing_area_m2 or ac.mtow_lb * KG_PER_LB / 600.0)
+    span = float(ac.wing_span_m or np.sqrt(9.0 * area))
+    fan_diameter = float(ac.fan_diameter_m or 1.8)
+    main_wheels = int(
+        ac.n_main_gear_wheels
+        or (4 if ac.mtow_lb * KG_PER_LB < 5e4 else 8))
+    st.session_state["phys_bpr"] = float(ac.bypass_ratio or 6.0)
+    st.session_state["phys_thrust_imperial"] = (
+        0.85 * ac.max_static_thrust_lb)
+    st.session_state["phys_thrust_metric"] = lbf_to_kn(
+        0.85 * ac.max_static_thrust_lb)
+    st.session_state["phys_wing_area"] = area
+    st.session_state["phys_wing_span"] = span
+    st.session_state["phys_flap_area"] = 0.17 * area
+    st.session_state["phys_slat_area"] = 0.08 * area
+    st.session_state["phys_nose_wheels"] = (
+        preset.nose_wheel_count if preset else 2)
+    st.session_state["phys_main_wheels"] = main_wheels
+    st.session_state["phys_nose_wheel_d"] = (
+        preset.nose_wheel_diameter_m if preset else 0.75)
+    st.session_state["phys_main_wheel_d"] = (
+        preset.main_wheel_diameter_m if preset else 1.1)
+    st.session_state["phys_fan_diameter_basic"] = fan_diameter
+    st.session_state["phys_fan_blades_basic"] = (
+        preset.fan_blades if preset else 24)
+    st.session_state.pop("physics_result", None)
+
+
+def _apply_physics_preset():
+    """Backward-compatible standalone preset callback."""
+    key = st.session_state.get("phys_preset_select", "__current__")
+    if key == "__current__":
+        st.session_state.pop("phys_active_preset", None)
+        st.session_state.pop("physics_result", None)
+        return
+    preset = PHYSICS_PRESETS[key]
+    st.session_state["phys_active_preset"] = key
+    _apply_physics_preset_values(preset)
+
+
+def _preset_aircraft(preset):
+    return ParametricAircraft(
+        name=preset.description,
+        engine_type="Jet",
+        n_engines=preset.n_engines,
+        max_static_thrust_lb=preset.max_thrust_lbf,
+        bypass_ratio=preset.bpr,
+        fan_diameter_m=preset.fan_diameter_m,
+        mtow_lb=preset.mtow_lb,
+        mlw_lb=preset.mlw_lb,
+        wing_area_m2=preset.estimated_wing_area_m2,
+        wing_span_m=preset.wing_span_m,
+        n_main_gear_wheels=preset.main_wheel_count,
+        noise_chapter=preset.noise_chapter,
+    )
+
+
+def _matching_active_preset(ac):
+    """Return the active preset only while the shared form still matches it."""
+    preset = PHYSICS_PRESETS.get(
+        st.session_state.get("phys_active_preset"))
+    if preset is None:
+        return None
+    expected = _preset_aircraft(preset)
+    numeric_fields = (
+        "n_engines", "max_static_thrust_lb", "mtow_lb", "mlw_lb",
+        "noise_chapter", "bypass_ratio", "fan_diameter_m", "wing_area_m2",
+        "wing_span_m", "n_main_gear_wheels",
+    )
+    for field in numeric_fields:
+        actual_value = getattr(ac, field)
+        expected_value = getattr(expected, field)
+        if actual_value is None or expected_value is None:
+            if actual_value != expected_value:
+                return None
+        elif not np.isclose(
+                float(actual_value), float(expected_value), rtol=1e-8,
+                atol=1e-8):
+            return None
+    return preset
+
+
+def _preset_input_status(preset):
+    """Map source fields to the names emitted by PhysicsDesign diagnostics."""
+    aliases = {
+        "wing_span_m": ("span_m", "airframe.wing_span_m"),
+        "fan_diameter_m": ("fan_diameter_m",),
+        "fan_blades": ("blade_count",),
+        "bpr": ("bypass_ratio",),
+        "nose_wheel_count": ("airframe.nose_wheel_count",),
+        "main_wheel_count": ("airframe.main_wheel_count",),
+        "nose_wheel_diameter_m": (
+            "airframe.nose_wheel_diameter_m",),
+        "main_wheel_diameter_m": (
+            "airframe.main_wheel_diameter_m",),
+    }
+    statuses = {}
+    for source in preset.sources:
+        for field in source.fields:
+            for name in aliases.get(field, (field,)):
+                statuses[name] = InputStatus(
+                    "supplied", True, source.title)
+    statuses["wing_area_m2"] = InputStatus(
+        "estimated", False,
+        "derived from published span with assumed aspect ratio 9")
+    statuses["airframe.wing_area_m2"] = statuses["wing_area_m2"]
+    statuses["thrust"] = InputStatus(
+        "supplied", True, "local EASA ANP v6.3 aircraft row")
+    if "blade_count" not in statuses:
+        statuses["blade_count"] = InputStatus(
+            "estimated", False,
+            "public fan-blade count unavailable; model default retained")
+    for field in ("nose_wheel_diameter_m", "main_wheel_diameter_m"):
+        alias = aliases[field][0]
+        if alias not in statuses:
+            statuses[alias] = InputStatus(
+                "estimated", False,
+                "representative wheel diameter; public value unavailable")
+    return statuses
+
+
+def _physics_design_from_form(ac, values):
+    """Build the typed physics boundary without using learned-model outputs."""
+    airframe_status = (
+        "supplied" if values["airframe_supplied"] else "estimated")
+    airframe_note = (
+        "user-declared geometry"
+        if airframe_status == "supplied"
+        else "concept-stage UI estimate")
+    airframe = AirframePhysicalInputs(
+        wing_area_m2=_physical(
+            values["wing_area_m2"], airframe_status, airframe_note),
+        wing_span_m=_physical(
+            values["wing_span_m"], airframe_status, airframe_note),
+        flap_area_m2=_physical(
+            values["flap_area_m2"], airframe_status, airframe_note),
+        flap_chord_m=_physical(
+            values["flap_chord_m"], airframe_status, airframe_note),
+        flap_deflection_deg=_physical(
+            values["flap_deflection_deg"], airframe_status, airframe_note),
+        slat_area_m2=_physical(
+            values["slat_area_m2"], airframe_status, airframe_note),
+        slat_chord_m=_physical(
+            values["slat_chord_m"], airframe_status, airframe_note),
+        slat_deflection_deg=_physical(
+            values["slat_deflection_deg"], airframe_status, airframe_note),
+        nose_wheel_count=_physical(
+            values["nose_wheel_count"], airframe_status, airframe_note),
+        nose_wheel_diameter_m=_physical(
+            values["nose_wheel_diameter_m"], airframe_status, airframe_note),
+        nose_strut_diameter_m=_physical(
+            values["nose_strut_diameter_m"], airframe_status, airframe_note),
+        main_wheel_count=_physical(
+            values["main_wheel_count"], airframe_status, airframe_note),
+        main_wheel_diameter_m=_physical(
+            values["main_wheel_diameter_m"], airframe_status, airframe_note),
+        main_strut_diameter_m=_physical(
+            values["main_strut_diameter_m"], airframe_status, airframe_note),
+        gear_down=_physical(
+            values["gear_down"], airframe_status, airframe_note),
+    )
+    atmosphere = AtmosphericPhysicalInputs(
+        temperature_c=_physical(
+            values["temperature_c"], "supplied", "physics UI input"),
+        relative_humidity_percent=_physical(
+            values["relative_humidity_percent"], "supplied",
+            "physics UI input"),
+        pressure_kpa=_physical(
+            values["pressure_kpa"], "supplied", "physics UI input"),
+    )
+
+    engine = None
+    if values["use_engine_detail"]:
+        engine_status = values["engine_status"]
+        engine_note = (
+            "user-declared engine-deck input"
+            if engine_status == "supplied"
+            else "concept-stage UI estimate")
+        engine = EnginePhysicalInputs(
+            thrust_n=_physical(
+                values["thrust_lbf"] * N_PER_LBF,
+                engine_status, engine_note),
+            bypass_ratio=_physical(
+                values["bpr"], engine_status, engine_note),
+            mass_flow_kg_s=_physical(
+                values["mass_flow_kg_s"], engine_status, engine_note),
+            nozzle_exit_area_m2=_physical(
+                values["nozzle_exit_area_m2"], engine_status, engine_note),
+            nozzle_exit_velocity_ms=_physical(
+                values["nozzle_exit_velocity_ms"],
+                engine_status, engine_note),
+            nozzle_exit_temperature_k=_physical(
+                values["nozzle_exit_temperature_k"],
+                engine_status, engine_note),
+            nozzle_exit_pressure_pa=_physical(
+                values["nozzle_exit_pressure_kpa"] * 1000.0,
+                engine_status, engine_note),
+            fan_diameter_m=_physical(
+                values["fan_diameter_m"], engine_status, engine_note),
+            rpm=_physical(values["rpm"], engine_status, engine_note),
+            n1_percent=_physical(
+                values["n1_percent"], engine_status, engine_note),
+            blade_count=_physical(
+                values["blade_count"], engine_status, engine_note),
+            stator_count=_physical(
+                values["stator_count"], engine_status, engine_note),
+            rotor_stator_spacing_m=_physical(
+                values["rotor_stator_spacing_m"],
+                engine_status, engine_note),
+            fan_temperature_rise_k=_physical(
+                values["fan_temperature_rise_k"],
+                engine_status, engine_note),
+            core_mass_flow_kg_s=_physical(
+                values["core_mass_flow_kg_s"],
+                engine_status, engine_note),
+            combustor_inlet_temperature_k=_physical(
+                values["combustor_inlet_temperature_k"],
+                engine_status, engine_note),
+            combustor_exit_temperature_k=_physical(
+                values["combustor_exit_temperature_k"],
+                engine_status, engine_note),
+            turbine_attenuation_db=_physical(
+                values["turbine_attenuation_db"],
+                engine_status, engine_note),
+        )
+
+    return PhysicsDesign(
+        ac.name, values["n_engines"], values["max_thrust_lbf"],
+        values["bpr"], values["mtow_lb"],
+        wing_area_m2=values["wing_area_m2"],
+        span_m=values["wing_span_m"],
+        fan_diameter_m=values["fan_diameter_m"],
+        n_fan_blades=values["blade_count"],
+        n_wheels=values["main_wheel_count"],
+        wheel_d_m=values["main_wheel_diameter_m"],
+        engine_physical_inputs=engine,
+        airframe_physical_inputs=airframe,
+        atmospheric_inputs=atmosphere,
+        input_status=values.get("input_status"),
+    )
+
+
+def _status_frame(statuses):
+    return pd.DataFrame([
+        {
+            "Input/source": name,
+            "Evidence": status.source,
+            "Complete": "yes" if status.complete else "no",
+            "Note": status.note,
+        }
+        for name, status in sorted(statuses.items())
+    ])
+
+
+def page_physics(*, embedded=False, compare_learned=True):
     pred = _require_prediction()
     if pred is None:
         return
-    meta = st.session_state["pred_meta"]
-    default_bpr = float(meta["aircraft"].get("bypass_ratio") or 6.0)
-    st.header("Physics cross-check")
-    st.caption("Independent physics-route (frozen A320-211 calibration) "
-               "SEL/LAmax comparison against the primary prediction. "
-               "EPNL/PNLTM are out of scope for the physics route.")
 
-    bpr = st.number_input("Bypass ratio", min_value=0.0, max_value=20.0,
-                          step=0.5, value=default_bpr, key="phys_bpr")
+    if embedded:
+        st.subheader("3. Component physics event")
+    else:
+        st.header("Component physics")
+    st.caption(
+        "Run the independent, frozen-calibration component model directly. "
+        + (
+            "ET/RF levels are shown only as an output comparison; they are "
+            "never inputs to the physics calculation. "
+            if compare_learned else
+            "No learned-model overlay is displayed in physics-only mode. ")
+        + "Scope: SEL and LAmax.")
+    st.warning(
+        "Conceptual screening only—not certification. EPNL/PNLTM, tone "
+        "corrections, installation shielding, ground reflection and terrain "
+        "are not modeled.")
 
-    if st.button("Run cross-check", type="primary"):
-        with st.spinner("Calibrating physics route (A320-211) — first run "
-                        "only..."):
-            result = pred.crosscheck_physics(bpr=bpr)
-        st.session_state["crosscheck"] = {"bpr": float(bpr), "result": result}
+    if not embedded:
+        preset_options = ["__current__", *PHYSICS_PRESETS]
+        p1, p2 = st.columns([3, 1])
+        with p1:
+            st.selectbox(
+                "v6.3 physical-specification preset",
+                preset_options,
+                format_func=lambda key: (
+                    "Current predicted aircraft"
+                    if key == "__current__" else PHYSICS_PRESETS[key].label),
+                key="phys_preset_select",
+                help="Presets are limited to aircraft in the local EASA ANP "
+                     "v6.3 corpus and retain field-level source status.")
+        with p2:
+            st.button(
+                "Apply preset", on_click=_apply_physics_preset,
+                width="stretch")
 
-    cc = st.session_state.get("crosscheck")
-    if cc is None:
-        st.info("Run the cross-check to compare against the physics route.")
+    ac = pred.aircraft
+    preset = _matching_active_preset(ac)
+    if preset:
+        st.success(
+            f"Physics aircraft matches the shared **{preset.label}** "
+            "definition used by ET/RF.")
+
+    default_bpr = float(ac.bypass_ratio or 6.0)
+    default_area = float(ac.wing_area_m2 or ac.mtow_lb * KG_PER_LB / 600.0)
+    default_span = float(ac.wing_span_m or np.sqrt(9.0 * default_area))
+    default_fan = float(ac.fan_diameter_m or 1.8)
+    default_blades = int(preset.fan_blades if preset else 24)
+    default_wheels = int(ac.n_main_gear_wheels or
+                         (4 if ac.mtow_lb * KG_PER_LB < 5e4 else 8))
+
+    c1, c2 = st.columns(2)
+    with c1:
+        op_mode = st.radio(
+            "Operation", ["D", "A"], horizontal=True, key="phys_op_mode",
+            format_func=lambda x: "Departure" if x == "D" else "Approach")
+    table_key = ("SEL", op_mode)
+    table = None if preset else pred.tables.get(table_key)
+    default_thrust = float(
+        (table.P[-1] if op_mode == "D" else table.P[0])
+        if table is not None else
+        ac.max_static_thrust_lb * (0.85 if op_mode == "D" else 0.2))
+    with c2:
+        bpr = float(st.number_input(
+            "Bypass ratio", min_value=0.0, max_value=25.0,
+            value=default_bpr, step=0.1, key="phys_bpr"))
+    c3, c4 = st.columns(2)
+    with c3:
+        if _is_metric():
+            thrust_lbf = kn_to_lbf(float(st.number_input(
+                "Event thrust [kN/engine]", min_value=0.1,
+                max_value=max(600.0, lbf_to_kn(ac.max_static_thrust_lb * 1.25)),
+                value=lbf_to_kn(default_thrust), step=1.0,
+                key="phys_thrust_metric")))
+        else:
+            thrust_lbf = float(st.number_input(
+                "Event thrust [lb/engine]", min_value=1.0,
+                max_value=max(130000.0, ac.max_static_thrust_lb * 1.25),
+                value=default_thrust, step=100.0,
+                key="phys_thrust_imperial"))
+    with c4:
+        if _is_metric():
+            distance_ft = m_to_ft(float(st.number_input(
+                "Closest distance [m]", min_value=30.0, max_value=100000.0,
+                value=ft_to_m(1000.0), step=50.0,
+                key="phys_distance_metric")))
+        else:
+            distance_ft = float(st.number_input(
+                "Closest distance [ft]", min_value=100.0, max_value=300000.0,
+                value=1000.0, step=100.0,
+                key="phys_distance_imperial"))
+
+    values = {
+        "n_engines": int(ac.n_engines),
+        "max_thrust_lbf": float(ac.max_static_thrust_lb),
+        "mtow_lb": float(ac.mtow_lb),
+        "bpr": bpr,
+        "thrust_lbf": thrust_lbf,
+        "wing_area_m2": default_area,
+        "wing_span_m": default_span,
+        "fan_diameter_m": default_fan,
+        "blade_count": default_blades,
+        "main_wheel_count": default_wheels,
+        "main_wheel_diameter_m": 1.1,
+        "use_engine_detail": False,
+        "input_status": (
+            _preset_input_status(preset) if preset is not None else None),
+    }
+
+    with st.expander("Airframe, configuration and atmosphere"):
+        st.caption(
+            "These values drive the six airframe components and atmospheric "
+            "absorption. Mark them supplied only when they come from an "
+            "aircraft definition or geometry source.")
+        values["airframe_supplied"] = st.checkbox(
+            "Treat airframe values as supplied evidence",
+            key="phys_airframe_supplied")
+        a1, a2, a3 = st.columns(3)
+        with a1:
+            values["wing_area_m2"] = float(st.number_input(
+                "Wing area [m²]", min_value=1.0, max_value=1500.0,
+                value=default_area, step=1.0, key="phys_wing_area"))
+            values["wing_span_m"] = float(st.number_input(
+                "Wing span [m]", min_value=1.0, max_value=120.0,
+                value=default_span, step=0.5, key="phys_wing_span"))
+            values["flap_area_m2"] = float(st.number_input(
+                "Flap area [m²]", min_value=0.1, max_value=500.0,
+                value=0.17 * default_area, step=0.5,
+                key="phys_flap_area"))
+            values["flap_chord_m"] = float(st.number_input(
+                "Flap chord [m]", min_value=0.1, max_value=15.0,
+                value=2.0, step=0.1, key="phys_flap_chord"))
+            values["flap_deflection_deg"] = float(st.number_input(
+                "Flap deflection [deg]", min_value=0.0, max_value=60.0,
+                value=10.0 if op_mode == "D" else 30.0, step=1.0,
+                key="phys_flap_deg"))
+        with a2:
+            values["slat_area_m2"] = float(st.number_input(
+                "Slat area [m²]", min_value=0.1, max_value=300.0,
+                value=0.08 * default_area, step=0.5,
+                key="phys_slat_area"))
+            values["slat_chord_m"] = float(st.number_input(
+                "Slat chord [m]", min_value=0.05, max_value=8.0,
+                value=0.7, step=0.05, key="phys_slat_chord"))
+            values["slat_deflection_deg"] = float(st.number_input(
+                "Slat deflection [deg]", min_value=0.0, max_value=60.0,
+                value=20.0, step=1.0, key="phys_slat_deg"))
+            values["nose_wheel_count"] = int(st.number_input(
+                "Nose wheels", min_value=1, max_value=8, value=2,
+                step=1, key="phys_nose_wheels"))
+            values["main_wheel_count"] = int(st.number_input(
+                "Main wheels", min_value=1, max_value=32,
+                value=default_wheels, step=1, key="phys_main_wheels"))
+            values["fan_diameter_m"] = float(st.number_input(
+                "Fan diameter [m]", min_value=0.1, max_value=8.0,
+                value=default_fan, step=0.05,
+                key="phys_fan_diameter_basic"))
+            values["blade_count"] = int(st.number_input(
+                "Fan blades", min_value=2, max_value=100,
+                value=default_blades, step=1,
+                key="phys_fan_blades_basic"))
+        with a3:
+            values["nose_wheel_diameter_m"] = float(st.number_input(
+                "Nose-wheel diameter [m]", min_value=0.1, max_value=3.0,
+                value=0.75, step=0.05, key="phys_nose_wheel_d"))
+            values["nose_strut_diameter_m"] = float(st.number_input(
+                "Nose-strut diameter [m]", min_value=0.01, max_value=1.0,
+                value=0.09, step=0.01, key="phys_nose_strut_d"))
+            values["main_wheel_diameter_m"] = float(st.number_input(
+                "Main-wheel diameter [m]", min_value=0.1, max_value=3.0,
+                value=1.1, step=0.05, key="phys_main_wheel_d"))
+            values["main_strut_diameter_m"] = float(st.number_input(
+                "Main-strut diameter [m]", min_value=0.01, max_value=1.0,
+                value=0.16, step=0.01, key="phys_main_strut_d"))
+            values["gear_down"] = st.checkbox(
+                "Landing gear down", value=(op_mode == "A"),
+                key="phys_gear_down")
+
+        e1, e2, e3 = st.columns(3)
+        with e1:
+            values["temperature_c"] = float(st.number_input(
+                "Temperature [°C]", min_value=-60.0, max_value=60.0,
+                value=15.0, step=1.0, key="phys_temperature"))
+        with e2:
+            values["relative_humidity_percent"] = float(st.number_input(
+                "Relative humidity [%]", min_value=1.0, max_value=100.0,
+                value=70.0, step=1.0, key="phys_humidity"))
+        with e3:
+            values["pressure_kpa"] = float(st.number_input(
+                "Pressure [kPa]", min_value=50.0, max_value=120.0,
+                value=101.325, step=0.1, key="phys_pressure"))
+
+    with st.expander("Detailed engine-deck inputs (optional)"):
+        values["use_engine_detail"] = st.checkbox(
+            "Enable typed mixed-jet, fan and core inputs",
+            key="phys_use_engine_detail")
+        st.caption(
+            "Disabled: the model estimates mixed-jet and fan state from "
+            "thrust/BPR and omits core noise. Enabled: complete fields activate "
+            "the detailed fan and optional core paths; the jet remains the "
+            "mixed-nozzle path unless multi-stream engine-deck data exist.")
+        if values["use_engine_detail"]:
+            evidence = st.radio(
+                "Engine input evidence",
+                ["Estimated concept values", "Supplied engine-deck values"],
+                horizontal=True, key="phys_engine_evidence")
+            values["engine_status"] = (
+                "supplied" if evidence.startswith("Supplied") else "estimated")
+            g1, g2, g3 = st.columns(3)
+            with g1:
+                values["mass_flow_kg_s"] = float(st.number_input(
+                    "Engine mass flow [kg/s]", 1.0, 2500.0, 450.0, 5.0,
+                    key="phys_mass_flow"))
+                values["nozzle_exit_area_m2"] = float(st.number_input(
+                    "Nozzle exit area [m²]", 0.01, 20.0, 1.5, 0.05,
+                    key="phys_nozzle_area"))
+                values["nozzle_exit_velocity_ms"] = float(st.number_input(
+                    "Nozzle exit velocity [m/s]", 10.0, 1500.0, 300.0, 5.0,
+                    key="phys_nozzle_velocity"))
+                values["nozzle_exit_temperature_k"] = float(st.number_input(
+                    "Nozzle exit temperature [K]", 150.0, 2500.0, 450.0, 10.0,
+                    key="phys_nozzle_temperature"))
+                values["nozzle_exit_pressure_kpa"] = float(st.number_input(
+                    "Nozzle total pressure [kPa]", 10.0, 3000.0, 160.0, 5.0,
+                    key="phys_nozzle_pressure"))
+            with g2:
+                values["fan_diameter_m"] = float(st.number_input(
+                    "Fan diameter [m]", 0.1, 8.0, default_fan, 0.05,
+                    key="phys_fan_diameter"))
+                values["rpm"] = float(st.number_input(
+                    "Fan speed [rpm]", 100.0, 30000.0, 3500.0, 100.0,
+                    key="phys_rpm"))
+                values["n1_percent"] = float(st.number_input(
+                    "N1 [%]", 1.0, 120.0, 90.0, 1.0, key="phys_n1"))
+                values["blade_count"] = int(st.number_input(
+                    "Fan blades", 2, 100, default_blades, 1,
+                    key="phys_blades"))
+                values["stator_count"] = int(st.number_input(
+                    "Stator vanes", 2, 200, 40, 1, key="phys_stators"))
+                values["rotor_stator_spacing_m"] = float(st.number_input(
+                    "Rotor–stator spacing [m]", 0.001, 2.0, 0.12, 0.01,
+                    key="phys_rotor_stator_spacing"))
+                values["fan_temperature_rise_k"] = float(st.number_input(
+                    "Fan temperature rise [K]", 1.0, 500.0, 65.0, 5.0,
+                    key="phys_fan_temp_rise"))
+            with g3:
+                values["core_mass_flow_kg_s"] = float(st.number_input(
+                    "Core mass flow [kg/s]", 0.1, 1000.0, 55.0, 1.0,
+                    key="phys_core_mass_flow"))
+                values["combustor_inlet_temperature_k"] = float(
+                    st.number_input(
+                        "Combustor inlet temperature [K]", 150.0, 2500.0,
+                        700.0, 10.0, key="phys_combustor_inlet"))
+                values["combustor_exit_temperature_k"] = float(
+                    st.number_input(
+                        "Combustor exit temperature [K]", 200.0, 3500.0,
+                        1350.0, 10.0, key="phys_combustor_exit"))
+                values["turbine_attenuation_db"] = float(st.number_input(
+                    "Turbine attenuation [dB]", 0.0, 80.0, 18.0, 1.0,
+                    key="phys_turbine_attenuation"))
+
+    physics_clicked = st.button(
+        "Run component physics", type="primary",
+        width="stretch", key="phys_run")
+    physics_log_slot = st.empty()
+    if physics_clicked:
+        calc_log = _CalculationLog(
+            "physics",
+            f"Component physics · {op_mode} event",
+            physics_log_slot)
+        try:
+            calc_log.add(
+                "BOUNDARY",
+                f"Convert {thrust_lbf:,.0f} lb/engine and "
+                f"{distance_ft:,.0f} ft to SI at the physics boundary")
+            design = _physics_design_from_form(ac, values)
+            calc_log.add(
+                "DESIGN",
+                f"Typed PhysicsDesign: BPR={design.bpr:.2f}, "
+                f"wing={design.wing_area_m2:.1f} m², "
+                f"span={design.span_m:.1f} m, engines={design.n_engines}")
+            calc_log.add(
+                "CALIBRATION",
+                "Resolve frozen A320-211 jet/fan/airframe source anchors")
+            calc_log.add(
+                "SOURCES",
+                "Evaluate mixed jet, fan, optional core and six airframe "
+                "sources over 69 emission angles")
+            with st.spinner(
+                    "Running frozen-calibration component physics..."):
+                working_pred = pred
+                if preset is not None and not embedded:
+                    meta = st.session_state["pred_meta"]
+                    calc_log.add(
+                        "SYNC",
+                        "Recalculate learned tables for the selected physics "
+                        "aircraft before comparison")
+                    working_pred = get_predictor(
+                        meta["model"], meta["version"]).predict(ac)
+                diagnostics = working_pred.physics_diagnostics(
+                    design, thrust_lbf, op_mode, distance_ft)
+                calc_log.add(
+                    "PROPAGATE",
+                    "Apply spherical spreading, ISO-style atmospheric "
+                    "absorption and A-weighting to each component spectrum")
+                calc_log.add(
+                    "ENERGY SUM",
+                    f"Combine {len(diagnostics.component_time_histories_db)} "
+                    "component histories in linear acoustic energy")
+                calc_log.add(
+                    "EVENT METRIC",
+                    "LAmax=max(LA(t)); "
+                    "SEL=10log10(∫10^(LA(t)/10)dt)")
+                physics_tables = {}
+                for metric in ("SEL", "LAmax"):
+                    calc_log.add(
+                        "PHYSICS NPD",
+                        f"Generate {metric}/{op_mode} at "
+                        f"{thrust_lbf:,.0f} lb/engine across 10 distances")
+                    physics_tables[metric] = working_pred.physics_table(
+                        design, metric, op_mode, [thrust_lbf])
+                learned_tables = {
+                    metric: (
+                        working_pred.tables.get((metric, op_mode))
+                        if compare_learned else None)
+                    for metric in ("SEL", "LAmax")
+                }
+                if compare_learned:
+                    calc_log.add(
+                        "COMPARE",
+                        "Interpolate ET/RF at identical thrust and distance "
+                        "coordinates; learned values never enter physics")
+        except (RuntimeError, ValueError, FloatingPointError) as exc:
+            calc_log.fail(str(exc))
+            st.error(f"Physics calculation could not run: {exc}")
+        else:
+            st.session_state["physics_result"] = {
+                "aircraft": ac.name,
+                "op_mode": op_mode,
+                "thrust_lbf": thrust_lbf,
+                "distance_ft": distance_ft,
+                "diagnostics": diagnostics,
+                "tables": physics_tables,
+                "learned_tables": learned_tables,
+                "preset": preset.key if preset is not None else None,
+                "compare_learned": compare_learned,
+            }
+            calc_log.finish(
+                f"SEL={diagnostics.sel_db:.1f} dB; "
+                f"LAmax={diagnostics.lamax_db:.1f} dB(A)")
+    else:
+        _render_saved_calculation_log("physics", physics_log_slot)
+
+    result = st.session_state.get("physics_result")
+    if (result is None
+            or result.get("aircraft") != ac.name
+            or result.get("compare_learned") != compare_learned):
+        st.info("Set the event inputs and press **Run component physics**.")
         return
 
-    threshold = 5.0
-    cols = st.columns(max(len(cc["result"]), 1))
-    for col, (metric, delta) in zip(cols, sorted(cc["result"].items())):
-        col.metric(f"{metric} mean |Δ| vs physics", f"{delta:.2f} dB",
-                  delta=f"{delta - threshold:+.2f} dB vs {threshold:.1f} dB "
-                  "caution", delta_color="inverse")
-    st.caption("EPNL / PNLTM are outside the physics route's scope "
-               "(SEL / LAmax only — no tone correction modeled).")
+    diagnostics = result["diagnostics"]
+    op_mode = result["op_mode"]
+    thrust_lbf = result["thrust_lbf"]
+    distance_ft = result["distance_ft"]
+    learned_levels = {}
+    mean_deltas = {}
+    for metric in ("SEL", "LAmax"):
+        learned = result["learned_tables"].get(metric)
+        if learned is not None:
+            learned_levels[metric] = learned.level(thrust_lbf, distance_ft)
+            physics_curve = result["tables"][metric].L[0]
+            learned_curve = np.array([
+                learned.level(thrust_lbf, distance)
+                for distance in STANDARD_DISTANCES_FT
+            ])
+            mean_deltas[metric] = float(
+                np.mean(np.abs(physics_curve - learned_curve)))
 
     st.divider()
-    if st.checkbox("BPR sweep (4.0 – 19.0)", key="phys_sweep"):
-        cache_key = (meta["name"], meta["model"])
-        cache = st.session_state.setdefault("phys_sweep_cache", {})
-        if cache.get("key") != cache_key:
-            bprs = np.arange(4.0, 19.1, 1.5)
-            sweep = {"SEL": [], "LAmax": []}
-            with st.spinner("Sweeping BPR..."):
-                for b in bprs:
-                    r = pred.crosscheck_physics(bpr=float(b))
-                    for m in sweep:
-                        sweep[m].append(r.get(m, np.nan))
-            cache.update(key=cache_key, bprs=bprs, sweep=sweep)
-        bprs, sweep = cache["bprs"], cache["sweep"]
-        fig, ax = plt.subplots(figsize=(7.2, 4.0))
-        for m, col in (("SEL", "#2b6cb0"), ("LAmax", "#c53030")):
-            ax.plot(bprs, sweep[m], "o-", color=col, label=m)
-        ax.axhline(threshold, ls="--", color="0.4", lw=1,
-                  label="caution threshold")
-        ax.set_xlabel("bypass ratio")
-        ax.set_ylabel("mean |Δ| [dB]")
-        ax.set_title("Physics cross-check sensitivity to BPR", fontsize=10)
-        ax.grid(True, alpha=0.25)
-        ax.legend(fontsize=8)
-        fig.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
-        st.caption("The sweep does not overwrite the stored cross-check "
-                  "result used on the other pages.")
+    if compare_learned:
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Physics SEL", f"{diagnostics.sel_db:.1f} dB",
+                  help="Time-integrated A-weighted exposure level.")
+        m2.metric("Physics LAmax", f"{diagnostics.lamax_db:.1f} dB(A)",
+                  help="Maximum A-weighted level during the event.")
+        m3.metric(
+            f"Physics − {st.session_state['pred_meta']['model'].upper()} SEL",
+            (f"{diagnostics.sel_db - learned_levels['SEL']:+.1f} dB"
+             if "SEL" in learned_levels else "n/a"))
+        m4.metric(
+            f"Physics − {st.session_state['pred_meta']['model'].upper()} LAmax",
+            (f"{diagnostics.lamax_db - learned_levels['LAmax']:+.1f} dB"
+             if "LAmax" in learned_levels else "n/a"))
+    else:
+        m1, m2 = st.columns(2)
+        m1.metric("Physics SEL", f"{diagnostics.sel_db:.1f} dB",
+                  help="Time-integrated A-weighted exposure level.")
+        m2.metric("Physics LAmax", f"{diagnostics.lamax_db:.1f} dB(A)",
+                  help="Maximum A-weighted level during the event.")
+    st.caption(
+        f"Event: {op_mode} · {_power_disp(thrust_lbf):,.1f} "
+        f"{_power_label()} · {ft_to_m(distance_ft):,.0f} m / "
+        f"{distance_ft:,.0f} ft closest "
+        "distance. Differences are diagnostics, not acceptance criteria.")
+
+    curve_metric = st.radio(
+        "NPD curve metric", ["SEL", "LAmax"], horizontal=True,
+        key="phys_curve_metric")
+    physics_table = result["tables"][curve_metric]
+    physics_curve = physics_table.L[0]
+    x = _dist_x()
+    fig, ax = plt.subplots(figsize=(8.0, 4.6))
+    ax.semilogx(
+        x, physics_curve, "o-", lw=2.2, color="#2b6cb0",
+        label="Component physics")
+    learned = result["learned_tables"].get(curve_metric)
+    if learned is not None:
+        learned_curve = np.array([
+            learned.level(thrust_lbf, distance)
+            for distance in STANDARD_DISTANCES_FT
+        ])
+        ax.semilogx(
+            x, learned_curve, "s--", lw=1.7, color=FUTURE_COLOR,
+            label=f"{st.session_state['pred_meta']['model'].upper()} overlay")
+    ax.set_xlabel(_dist_label())
+    ax.set_ylabel(f"{curve_metric} [dB]")
+    ax.set_title(
+        f"{curve_metric}/{op_mode} at {_power_disp(thrust_lbf):,.1f} "
+        f"{_power_label()}", fontsize=10)
+    ax.grid(True, which="both", alpha=0.25)
+    ax.legend()
+    fig.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
+    if curve_metric in mean_deltas:
+        st.caption(
+            f"Mean absolute physics–"
+            f"{st.session_state['pred_meta']['model'].upper()} difference "
+            f"across the ten standard distances: "
+            f"{mean_deltas[curve_metric]:.2f} dB.")
+
+    st.subheader("Component contributions")
+    component_rows = [
+        {
+            "Component": name.replace("_", " ").title(),
+            "SEL [dB]": metrics["SEL"],
+            "LAmax [dB(A)]": metrics["LAmax"],
+        }
+        for name, metrics in diagnostics.component_metrics_db.items()
+    ]
+    component_df = pd.DataFrame(component_rows).sort_values(
+        "LAmax [dB(A)]", ascending=False)
+    st.dataframe(
+        component_df.style.format(
+            {"SEL [dB]": "{:.1f}", "LAmax [dB(A)]": "{:.1f}"}),
+        width="stretch", hide_index=True)
+
+    fig, ax = plt.subplots(figsize=(8.0, 4.6))
+    ax.plot(
+        diagnostics.time_s, diagnostics.total_time_history_db,
+        color="black", lw=2.2, label="Total")
+    ranked_components = sorted(
+        diagnostics.component_time_histories_db,
+        key=lambda name:
+        diagnostics.component_metrics_db[name]["LAmax"],
+        reverse=True)[:5]
+    for name in ranked_components:
+        ax.plot(
+            diagnostics.time_s,
+            diagnostics.component_time_histories_db[name],
+            lw=1.2, alpha=0.8, label=name.replace("_", " "))
+    ax.set_xlabel("Event time [s]")
+    ax.set_ylabel("A-weighted level [dB(A)]")
+    ax.set_title("Received component time histories", fontsize=10)
+    ax.grid(True, alpha=0.25)
+    ax.legend(fontsize=8, ncol=2)
+    fig.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
+
+    with st.expander("Input evidence and model boundaries"):
+        st.markdown("**Source-path status**")
+        st.dataframe(
+            _status_frame(diagnostics.source_status),
+            width="stretch", hide_index=True)
+        st.markdown("**Input provenance**")
+        st.dataframe(
+            _status_frame(diagnostics.input_status),
+            width="stretch", hide_index=True)
+        st.warning(
+            "Excluded effects: "
+            + ", ".join(effect.replace("_", " ")
+                        for effect in diagnostics.excluded_effects))
+        st.caption(diagnostics.uncertainty_note)
 
 
 # ===========================================================================
@@ -1256,7 +2224,6 @@ PAGES = {
     "Aircraft Designer": page_designer,
     "Prediction results": page_results,
     "Comparison": page_comparison,
-    "Physics cross-check": page_physics,
     "Operations": page_operations,
     "Fleet explorer": page_fleet,
 }
@@ -1291,24 +2258,22 @@ def _sidebar_status(version: str):
 def _sidebar_how_to_use():
     with st.expander("How to use", expanded="prediction" not in st.session_state):
         st.markdown(
-            "1. **Aircraft design** — define a parametric aircraft, optionally "
-            "prefill it from the fleet, then press **Predict**. Advanced "
-            "settings are available when needed.\n"
+            "1. **Aircraft design** — select one shared preset or custom "
+            "aircraft, choose learned, physics, or comparison mode, then run "
+            "the analysis. Physics inputs and the same-aircraft comparison "
+            "remain on this page.\n"
             "2. **Prediction results** — view the generated NPD tables "
             "and curves, download the ANP-layout CSV, optionally store "
             "the prediction into `anp_data.sqlite`.\n"
             "3. **Comparison** — overlay the predicted aircraft against "
             "its nearest real ANP neighbours.\n"
-            "4. **Physics cross-check** *(optional)* — sanity-check the "
-            "prediction against the independent physics route "
-            "(SEL / LAmax only).\n"
-            "5. **Operations** *(optional)* — synthesize a departure "
+            "4. **Operations** *(optional)* — synthesize a departure "
             "flight path and read off the noise level at a ground "
             "observer.\n"
-            "6. **Fleet explorer** — browse the underlying real ANP "
+            "5. **Fleet explorer** — browse the underlying real ANP "
             "fleet and any validation artifacts, at any time, no "
             "prediction needed.\n\n"
-            "Steps 2–5 need a prediction from step 1 first — each page "
+            "Steps 2–4 need an analysis from step 1 first — each page "
             "prompts you back to **Aircraft Designer** until one exists.")
 
 
