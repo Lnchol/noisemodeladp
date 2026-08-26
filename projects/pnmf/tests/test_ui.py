@@ -13,6 +13,17 @@ pytestmark = pytest.mark.skipif(
 APP = os.path.join(os.path.dirname(__file__), os.pardir, "pnmf_ui.py")
 
 
+def _assert_methodology_panel(at):
+    assert any(item.label == "Method, sources, and limitations"
+               for item in at.expander)
+    markdown = [item.value for item in at.markdown]
+    for heading in ("**Inputs/source**", "**Transformation or method**",
+                    "**Output**", "**Evidence boundary**"):
+        assert any(heading in value for value in markdown)
+    assert any("easa.europa.eu" in value.lower() for value in markdown)
+    assert any("ecac-ceac.org" in value.lower() for value in markdown)
+
+
 def test_ui_boots():
     at = AppTest.from_file(APP).run(timeout=120)
     assert not at.exception
@@ -28,6 +39,56 @@ def test_fleet_explorer_renders():
     assert len(at.dataframe) >= 1
 
 
+@pytest.mark.parametrize(
+    "page",
+    ["Comparison", "Prediction results", "Operations"],
+)
+def test_empty_user_facing_pages_explain_their_method(page):
+    at = AppTest.from_file(APP).run(timeout=120)
+    at.radio(key="nav").set_value(page)
+    at.run(timeout=120)
+    assert not at.exception
+    _assert_methodology_panel(at)
+
+
+def test_fleet_validation_evidence_explains_fixed_routes_and_report():
+    at = AppTest.from_file(APP).run(timeout=120)
+    at.radio(key="nav").set_value("Fleet explorer")
+    at.run(timeout=120)
+    assert not at.exception
+    _assert_methodology_panel(at)
+    captions = [item.value for item in at.caption]
+    assert any("Extra Trees" in value and "fixed production" in value
+               for value in captions)
+    assert any("Random Forest" in value and "validation challenger" in value
+               for value in captions)
+    assert any("Active methodology report" in value for value in captions)
+    assert any("JET_MODEL_METHODOLOGY_AND_VALIDATION_REPORT.md" in item.value
+               for item in at.markdown)
+
+
+@pytest.mark.parametrize(
+    "page",
+    ["Aircraft Designer", "Comparison", "Prediction results", "Operations",
+     "Fleet explorer"],
+)
+def test_user_facing_pages_hide_internal_prediction_version_names(page):
+    at = AppTest.from_file(APP).run(timeout=120)
+    if page != "Aircraft Designer":
+        at.radio(key="nav").set_value(page)
+        at.run(timeout=120)
+    visible = "\n".join(
+        str(item.value)
+        for element_type in (
+            "caption", "markdown", "info", "success", "warning", "error",
+            "subheader", "title",
+        )
+        for item in getattr(at, element_type)
+    )
+    assert "Jet-v2" not in visible
+    assert "et-jet_merged-jet-v2" not in visible
+
+
 def test_designer_starts_with_generic_aircraft_inputs():
     at = AppTest.from_file(APP).run(timeout=120)
     assert at.session_state["f_name"] == "New aircraft"
@@ -36,17 +97,21 @@ def test_designer_starts_with_generic_aircraft_inputs():
     assert all("Load preset" not in button.label for button in at.button)
     assert at.session_state["f_analysis_approach"] == "Compare learned + physics"
     assert "Physics cross-check" not in at.radio(key="nav").options
+    assert not any(widget.key in {"f_model", "f_training_scope"}
+                   for widget in at.selectbox)
 
 
 def test_predict_et():
     at = AppTest.from_file(APP).run(timeout=120)
-    at.selectbox(key="f_model").set_value("et")
     next(b for b in at.button
          if b.label == "Run learned model and prepare comparison").click()
     at.run(timeout=300)
     assert not at.exception
     assert "prediction" in at.session_state
     assert len(at.session_state["prediction"].tables) == 8
+    assert at.session_state["prediction"].metadata["training_population"] == "jet_merged"
+    assert at.session_state["prediction"].metadata["learner"] == "et"
+    assert at.session_state["pred_meta"]["model_identity"] == "et-jet_merged-jet-v2"
     learned_log = at.session_state["calculation_logs"]["learned"]
     assert learned_log["state"] == "complete"
     assert sum("MODEL TABLE" in line

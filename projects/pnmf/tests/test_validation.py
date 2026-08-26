@@ -6,7 +6,7 @@ import pandas as pd
 
 from pnmf import validation
 from pnmf.anp import ANPDatabase
-from pnmf.models import SurrogateNPDModel
+from pnmf.models import SurrogateNPDModel, validation_regressor
 
 
 def test_aircraft_group_and_temporal_purge_control_7773er():
@@ -81,14 +81,14 @@ def test_exact_production_et_rf_surface():
     assert set(validation.MODEL_PARAMS) == {"et", "rf"}
     assert len(validation.COMBOS) == 8
 
-    et = SurrogateNPDModel("et", random_state=23)._new_regressor()
+    et = SurrogateNPDModel(random_state=23)._new_regressor()
     assert et.n_estimators == 500
     assert et.max_depth == 24
     assert et.max_features == 0.5
     assert et.min_samples_leaf == 1
     assert et.random_state == 23
 
-    rf = SurrogateNPDModel("rf", random_state=23)._new_regressor()
+    rf = validation_regressor("rf", 23)
     assert rf.n_estimators == 200
     assert rf.max_depth is None
     assert rf.max_features == 1.0

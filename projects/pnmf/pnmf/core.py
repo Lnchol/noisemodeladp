@@ -12,11 +12,11 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional
 import numpy as np
 
-ENGINE_TYPES = ["Jet", "Turboprop", "Piston"]
+ENGINE_TYPES = ["Jet"]
 
 # Canonical future-concept demo aircraft, used by pnmf_cli.py predict/physics/demo/report.
 FUTURE_UHBR_TWIN = dict(
-    name="FUTURE-UHBR-TWIN", engine_type="Jet", n_engines=4,
+    name="FUTURE-UHBR-TWIN", n_engines=4,
     max_static_thrust_lb=75000.0, mtow_lb=370000.0, mlw_lb=445000.0,
     bypass_ratio=15.0, noise_chapter=4,
 )
@@ -28,7 +28,7 @@ class ParametricAircraft:
     name: str = "GENERIC"
 
     # --- propulsion (primary noise drivers, available in ANP) ---
-    engine_type: str = "Jet"            # Jet / Turboprop / Piston
+    engine_type: str = field(default="Jet", init=False)
     n_engines: int = 2
     max_static_thrust_lb: float = 30000.0   # per-engine sea-level static thrust
     # optional richer propulsion params (used by semi-empirical layer if given;
@@ -50,19 +50,21 @@ class ParametricAircraft:
     noise_chapter: int = 4
 
     # -----------------------------------------------------------------
+    def __post_init__(self) -> None:
+        if int(self.n_engines) <= 0:
+            raise ValueError("Jet engine count must be positive")
+        if float(self.max_static_thrust_lb) <= 0:
+            raise ValueError("Jet static thrust must be positive")
+
     def feature_vector(self) -> dict:
         """Numeric features consumed by the surrogate / semi-empirical models.
 
         Uses only quantities that exist for every ANP aircraft so the model can
         be validated leave-one-out on the real population.
         """
-        et = {t: 1.0 if self.engine_type == t else 0.0 for t in ENGINE_TYPES}
         mlw_mtow = self.mlw_lb / self.mtow_lb if self.mtow_lb else np.nan
         total_thrust = self.max_static_thrust_lb * self.n_engines
         return {
-            "is_jet": et["Jet"],
-            "is_turboprop": et["Turboprop"],
-            "is_piston": et["Piston"],
             "n_engines": float(self.n_engines),
             "log_mtow": np.log10(self.mtow_lb),
             "log_mlw": np.log10(self.mlw_lb),
@@ -74,16 +76,20 @@ class ParametricAircraft:
 
     @staticmethod
     def feature_names():
-        return ["is_jet", "is_turboprop", "is_piston", "n_engines",
-                "log_mtow", "log_mlw", "mlw_mtow",
+        return ["n_engines", "log_mtow", "log_mlw", "mlw_mtow",
                 "log_thrust_per_eng", "log_total_thrust", "noise_chapter"]
 
     @classmethod
     def from_anp_row(cls, npd_id: str, row) -> "ParametricAircraft":
         """Build a ParametricAircraft from an ANP parametric-table row."""
+        engine_type = str(row["Engine Type"])
+        if engine_type != "Jet":
+            raise ValueError(
+                f"ParametricAircraft is Jet-only; {npd_id} has engine type "
+                f"{engine_type!r}"
+            )
         return cls(
             name=str(row.get("Description", npd_id)),
-            engine_type=str(row["Engine Type"]),
             n_engines=int(row["Number Of Engines"]),
             max_static_thrust_lb=float(row["Max Sea Level Static Thrust (lb)"]),
             mtow_lb=float(row["Max Gross Takeoff Weight (lb)"]),
@@ -110,10 +116,9 @@ def np_isnan(x):
 # aircraft resembles (e.g. a huge thrust-to-weight ratio), which pushes the
 # models far outside their ANP training range and makes the NPD graphs absurd.
 # We derive a realistic envelope from the real ANP fleet (not hardcoded magic
-# numbers) and flag inputs against it. Two severity levels for messaging only:
+# numbers) and flag inputs against it. Two severity levels drive handling:
 # "error" = physically impossible / absurd, "warning" = unusual / extrapolating.
-# This is a warn layer, not a gate — novel future concepts (the tool's whole
-# point) legitimately sit outside today's fleet.
+# Hard errors gate learned prediction; warnings still admit novel future concepts.
 
 # ANP aircraft-table column names (as loaded by ANPDatabase).
 _AC_ET = "Engine Type"
@@ -206,7 +211,7 @@ def evaluate_aircraft_inputs(aircraft, envelope) -> list:
         if thr > 2.5 * hi or thr < 0.3 * lo:
             err("thrust", f"{thr:,.0f} lb/engine is far outside anything a "
                           f"'{et}' has in the ANP fleet "
-                          f"({lo:,.0f}–{hi:,.0f} lb) — likely the wrong engine "
+                          f"({lo:,.0f} to {hi:,.0f} lb); likely the wrong engine "
                           f"type or a typo.")
         elif thr > p99 or thr < p1:
             warn("thrust", f"{thr:,.0f} lb/engine is unusual for a '{et}' "
@@ -217,7 +222,7 @@ def evaluate_aircraft_inputs(aircraft, envelope) -> list:
     twband = e.get("tw")
     if tw > 1.5 or tw < 0.05:
         err("thrust", f"Thrust-to-weight ratio {tw:.2f} is not physical for a "
-                      f"transport aircraft — check thrust, engine count and "
+                      f"transport aircraft; check thrust, engine count and "
                       f"MTOW.")
     elif twband and (tw > twband[1] or tw < twband[0]):
         warn("thrust", f"Thrust-to-weight ratio {tw:.2f} is outside the real "
@@ -227,10 +232,10 @@ def evaluate_aircraft_inputs(aircraft, envelope) -> list:
     # --- MLW vs MTOW ------------------------------------------------------
     ratio = mlw / mtow
     if ratio > 1.6 or ratio < 0.3:
-        err("mlw", f"MLW is {ratio:.2f}× MTOW — outside anything physical; "
+        err("mlw", f"MLW is {ratio:.2f} times MTOW; outside anything physical; "
                    f"check both weights.")
     elif ratio > 1.0:
-        warn("mlw", f"MLW exceeds MTOW ({ratio:.2f}×) — allowed but unusual "
+        warn("mlw", f"MLW exceeds MTOW ({ratio:.2f} times); allowed but unusual "
                     f"(the shipped preset is like this).")
 
     # --- MTOW vs its engine type ------------------------------------------

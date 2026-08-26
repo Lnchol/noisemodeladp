@@ -22,8 +22,8 @@ without committing those files.
 
 Hosted GitHub CI therefore runs only compilation/import checks and the
 data-independent synthetic `tests/test_ci_smoke.py` selection. The full local
-suite and `validate-model` require the ignored ANP corpus/datastore; their
-current evidence is [MODEL_TRAINING_REPORT](projects/pnmf/docs/MODEL_TRAINING_REPORT.md).
+suite and Jet validation require the ignored ANP corpus/datastore; their
+current evidence is [JET_MODEL_METHODOLOGY_AND_VALIDATION_REPORT](docs/JET_MODEL_METHODOLOGY_AND_VALIDATION_REPORT.md).
 
 ## Codex workflow
 
@@ -38,7 +38,8 @@ must not commit or push unless explicitly asked.
 - [System design](projects/pnmf/docs/NPD_SYSTEM_DESIGN.md)
 - [Model architecture](projects/pnmf/docs/MODEL_ARCHITECTURE_REPORT.md)
 - [Component-physics technical paper](projects/pnmf/docs/PNMF_COMPONENT_PHYSICS_TECHNICAL_PAPER.pdf)
-- [Current learned-model validation](projects/pnmf/docs/MODEL_TRAINING_REPORT.md)
+- [Current Jet methodology and validation](docs/JET_MODEL_METHODOLOGY_AND_VALIDATION_REPORT.md)
+- [EASA and ECAC source ledger](docs/EASA_ECAC_SOURCE_LEDGER.md)
 - [Jet reference validation](projects/pnmf/docs/JET_REFERENCE_VALIDATION_REPORT.md)
 - [Migration progress](projects/pnmf/docs/MIGRATION_PROGRESS_REPORT.md)
 - [Abbreviations and glossary](projects/pnmf/docs/ABBREVIATIONS.md)

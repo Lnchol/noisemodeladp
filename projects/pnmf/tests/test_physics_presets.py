@@ -5,6 +5,66 @@ from pnmf.anp import ANPDatabase
 from pnmf.physics_presets import PHYSICS_PRESETS
 
 
+_TRAINABLE_PRESET_KEYS = {
+    "A320-270N",
+    "A321-270N",
+    "A330-743L",
+    "A350-1041",
+    "747400RN",
+    "7673ER",
+    "7879",
+    "7773ER",
+    "ERJ190-300",
+    "ERJ190-400",
+    "FAL900EX",
+}
+
+_INPUT_FIELDS = {
+    "n_engines",
+    "max_thrust_lbf",
+    "mtow_lb",
+    "mlw_lb",
+    "noise_chapter",
+    "bpr",
+    "wing_span_m",
+    "fan_diameter_m",
+    "fan_blades",
+    "nose_wheel_count",
+    "main_wheel_count",
+    "nose_wheel_diameter_m",
+    "main_wheel_diameter_m",
+}
+
+
+def test_trainable_physics_presets_match_verified_registry_keys() -> None:
+    # Given: the physics preset registry.
+    # When: its keys are compared with the approved trainable scope.
+    # Then: all and only the eleven verified aircraft are available.
+    assert set(PHYSICS_PRESETS) == _TRAINABLE_PRESET_KEYS
+    assert PHYSICS_PRESETS["A320-270N"].label.endswith("PW1100G-JM")
+
+
+@pytest.mark.parametrize("preset", PHYSICS_PRESETS.values(), ids=PHYSICS_PRESETS)
+def test_preset_provenance_labels_every_input_and_missing_component_decks(preset) -> None:
+    # Given: a trainable aircraft's component-physics defaults.
+    # When: its provenance records are indexed by field.
+    # Then: every input is labelled and unsupported component decks stay explicit.
+    provenance = {record.field: record for record in preset.provenance}
+    assert _INPUT_FIELDS <= set(provenance)
+    assert {record.status for record in provenance.values()} == {
+        "supplied",
+        "estimated",
+        "unavailable",
+    }
+    assert provenance["engine_component_deck"].status == "unavailable"
+    assert provenance["high_lift_geometry"].status == "unavailable"
+    supplied_fields = {
+        record.field for record in provenance.values() if record.status == "supplied"
+    }
+    source_fields = {field for source in preset.sources for field in source.fields}
+    assert supplied_fields <= source_fields
+
+
 def test_physics_presets_are_present_in_local_v63_corpus():
     params = ANPDatabase(".").param_table()
     v63_ids = set(params.loc[

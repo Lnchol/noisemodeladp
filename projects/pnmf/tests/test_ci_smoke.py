@@ -13,20 +13,21 @@ from pnmf.models import (
     SurrogateNPDModel,
     enforce_distance_monotone,
     power_features,
+    validation_regressor,
 )
 from pnmf.physics import PhysicsDesign, PhysicsNPDModel
 
 
 def test_supported_et_rf_surface_and_exact_production_parameters():
     assert SUPPORTED_LEARNERS == ("et", "rf")
-    et = SurrogateNPDModel("et", random_state=7)._new_regressor()
-    rf = SurrogateNPDModel("rf", random_state=7)._new_regressor()
+    et = SurrogateNPDModel(random_state=7)._new_regressor()
+    rf = validation_regressor("rf", 7)
     assert (et.n_estimators, et.max_depth, et.max_features,
             et.min_samples_leaf, et.n_jobs) == (500, 24, 0.5, 1, -1)
     assert (rf.n_estimators, rf.max_depth, rf.max_features,
             rf.min_samples_leaf, rf.n_jobs) == (200, None, 1.0, 2, -1)
-    with pytest.raises(ValueError, match="unsupported learned model"):
-        SurrogateNPDModel("unsupported")
+    with pytest.raises(TypeError):
+        SurrogateNPDModel("rf")
 
 
 def test_power_conversion_for_lb_percent_and_rpm_axes():

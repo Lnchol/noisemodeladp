@@ -969,9 +969,9 @@ def run_jet_reference_validation(
                     ["logical_table", "source_dataset", "source_file"]
                 ].to_dict(orient="records"),
                 key=lambda row: (
-                    row["logical_table"],
-                    row["source_dataset"],
-                    row["source_file"],
+                    str(row.get("logical_table") or ""),
+                    str(row.get("source_dataset") or ""),
+                    str(row.get("source_file") or ""),
                 ),
             ),
         },

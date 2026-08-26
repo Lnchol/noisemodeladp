@@ -30,14 +30,11 @@ function Show-Usage {
     Write-Host "Tasks:"
     Write-Host "  setup     - create/update .venv and install requirements.txt"
     Write-Host "  test      - run the pytest suite (tests/)"
-    Write-Host "  validate  - LOO validation (default: all 8 metric:mode pairs)"
-    Write-Host "  validate-model - current grouped + temporal ET/RF validation"
     Write-Host "  validate-jet-reference - legacy-trained frozen v6.3 Jet release holdout"
+    Write-Host "  validate-jet-model - evidence-gated Jet feature and learner comparison"
+    Write-Host "  verify-doc29-reference - official ECAC Doc 29 Volume 3 Part 1 contract"
     Write-Host "  physics   - physics-route calibration + fleet validation"
-    Write-Host "  demo      - end-to-end demo"
-    Write-Host "  compare   - LOO bake-off of all candidate models"
     Write-Host "  manifest  - inspect combined v2.3 + v6.3 data provenance"
-    Write-Host "  subs      - external check vs the 19.5k-aircraft substitution table"
     Write-Host "  datastore - build anp_data.sqlite from staged ANP CSVs (one-time)"
     Write-Host "  predict   - predict + QA-gate + store NPD tables for a future aircraft"
     Write-Host "  zip       - adaptively package framework + data SQL into .zip archive"
@@ -50,6 +47,25 @@ function Write-Step {
     param([string]$Message)
     Write-Host ""
     Write-Host "[PNMF] $Message" -ForegroundColor Cyan
+}
+
+function Get-Sha256Hex {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $hashCommand = Get-Command Get-FileHash -ErrorAction SilentlyContinue
+    if ($null -ne $hashCommand) {
+        return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+    }
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        try {
+            return ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+        } finally {
+            $stream.Dispose()
+        }
+    } finally {
+        $sha256.Dispose()
+    }
 }
 
 function Install-PnmfEnvironment {
@@ -66,7 +82,7 @@ function Install-PnmfEnvironment {
         }
     }
 
-    $RequiredHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Requirements).Hash
+    $RequiredHash = Get-Sha256Hex -Path $Requirements
     $InstalledHash = if (Test-Path -LiteralPath $SetupStamp) {
         (Get-Content -LiteralPath $SetupStamp -Raw).Trim()
     } else {
@@ -119,25 +135,19 @@ switch ($Task) {
         Install-PnmfEnvironment
         & $PythonExe -m pytest tests/ -q
     }
-    "validate" {
-        Install-PnmfEnvironment
-        if ($Rest) { & $PythonExe $Cli validate @Rest }
-        else { & $PythonExe $Cli validate SEL:D SEL:A EPNL:D EPNL:A LAmax:D LAmax:A PNLTM:D PNLTM:A }
-    }
-    "validate-model" {
-        Install-PnmfEnvironment
-        & $PythonExe $Cli validate-model @Rest
-    }
     "validate-jet-reference" {
         Install-PnmfEnvironment
         & $PythonExe $Cli validate-jet-reference @Rest
     }
-    "subs" {
+    "validate-jet-model" {
         Install-PnmfEnvironment
-        if ($Rest) { & $PythonExe $Cli subs @Rest }
-        else { & $PythonExe $Cli subs "03_data/anp_aircraft_substitutions_-_jets_heavy_props_22022018_.xlsx" }
+        & $PythonExe $Cli validate-jet-model @Rest
     }
-    { $_ -in "physics", "demo", "compare", "datastore", "manifest", "predict" } {
+    "verify-doc29-reference" {
+        Install-PnmfEnvironment
+        & $PythonExe $Cli verify-doc29-reference @Rest
+    }
+    { $_ -in "physics", "datastore", "manifest", "predict" } {
         Install-PnmfEnvironment
         & $PythonExe $Cli $Task @Rest
     }

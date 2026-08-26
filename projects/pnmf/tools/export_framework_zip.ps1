@@ -17,6 +17,25 @@ $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $packageName = 'pnmf-framework'
 $topLevelName = 'pnmf-framework'
 
+function Get-Sha256Hex {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $hashCommand = Get-Command Get-FileHash -ErrorAction SilentlyContinue
+    if ($null -ne $hashCommand) {
+        return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+    }
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        try {
+            return ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+        } finally {
+            $stream.Dispose()
+        }
+    } finally {
+        $sha256.Dispose()
+    }
+}
+
 # --- ADAPTIVE EXTRACTOR: EXTRACT MODE ---
 if ($Extract -or (-not [string]::IsNullOrWhiteSpace($ExtractTo))) {
     $zipPath = if (-not [string]::IsNullOrWhiteSpace($SourceZip)) { $SourceZip } elseif (-not [string]::IsNullOrWhiteSpace($Destination)) { $Destination } else { "" }
@@ -117,8 +136,9 @@ $rootPrefix = $projectRoot.TrimEnd('\', '/') + [System.IO.Path]::DirectorySepara
 
 $files = [System.Collections.Generic.List[string]]::new()
 
-# Standard allowlisted root & tool files
-$allowlist = @('Launch_PNMF.cmd', 'pnmf_cli.py', 'pnmf_ui.py', 'pnmf.ps1', 'requirements.txt', 'README.md', 'HOW_TO_USE.txt', 'AGENTS.md', 'tools/export_framework_zip.ps1')
+# Runtime entry points and user-facing instructions. Governance, reports,
+# presentations, and workspace metadata are intentionally excluded.
+$allowlist = @('Launch_PNMF.cmd', 'pnmf_cli.py', 'pnmf_ui.py', 'pnmf.ps1', 'requirements.txt', 'README.md', 'HOW_TO_USE.txt')
 foreach ($relative in $allowlist) {
     $path = Join-Path $projectRoot $relative
     if (Test-Path -LiteralPath $path -PathType Leaf) {
@@ -126,37 +146,53 @@ foreach ($relative in $allowlist) {
     }
 }
 
-# Code and test directories
-foreach ($folder in @('pnmf', 'tests', 'tools')) {
-    $folderPath = Join-Path $projectRoot $folder
-    if (Test-Path -LiteralPath $folderPath -PathType Container) {
-        Get-ChildItem -LiteralPath $folderPath -Recurse -File |
-            Where-Object { $_.Extension -in @('.py', '.ps1', '.cmd', '.txt', '.md', '.json', '.yml', '.yaml') } |
-            Sort-Object FullName |
-            ForEach-Object { $files.Add($_.FullName) }
-    }
+# Runtime package only; tests and report/build helpers are not distributable.
+$pnmfPath = Join-Path $projectRoot 'pnmf'
+if (Test-Path -LiteralPath $pnmfPath -PathType Container) {
+    Get-ChildItem -LiteralPath $pnmfPath -Recurse -File |
+        Where-Object { $_.Extension -eq '.py' -and $_.Name -ne 'serdp09_reference.py' } |
+        Sort-Object FullName |
+        ForEach-Object { $files.Add($_.FullName) }
+}
+# The frozen physics parameters are the one non-Python runtime artifact.
+$calibrationArtifact = Join-Path $pnmfPath 'physics_calibration_A320-270N_v1.json'
+if (-not (Test-Path -LiteralPath $calibrationArtifact -PathType Leaf)) {
+    throw "Required calibration artifact not found: $calibrationArtifact"
+}
+$files.Add($calibrationArtifact)
+$exportTool = Join-Path $projectRoot 'tools/export_framework_zip.ps1'
+if (Test-Path -LiteralPath $exportTool -PathType Leaf) {
+    $files.Add($exportTool)
 }
 
-# ADAPTIVE DATA SQL & CORPUS INCLUSION
+if ($IncludeData -and $ExcludeData) {
+    throw 'Use either -IncludeData or -ExcludeData, not both.'
+}
+
+# SQLite datastore and raw corpus are included by default.
 $shouldIncludeData = (-not $ExcludeData)
 if ($shouldIncludeData) {
-    # 1. Check for SQLite Datastore
-    $sqlitePath = Join-Path $projectRoot "anp_data.sqlite"
-    if (Test-Path -LiteralPath $sqlitePath -PathType Leaf) {
-        $files.Add($sqlitePath)
-        Write-Host "[Adaptive Extractor] Including Data SQL database: anp_data.sqlite" -ForegroundColor Cyan
+    $sqlitePath = Join-Path $projectRoot 'anp_data.sqlite'
+    if (-not (Test-Path -LiteralPath $sqlitePath -PathType Leaf)) {
+        throw "Required data store not found: $sqlitePath. Use -ExcludeData only for an intentional code-only archive."
     }
+    $files.Add($sqlitePath)
+    Write-Host '[Framework Export] Including SQLite datastore: anp_data.sqlite' -ForegroundColor Cyan
 
-    # 2. Check for 03_data directory
-    $dataDir = Join-Path $projectRoot "03_data"
-    if (Test-Path -LiteralPath $dataDir -PathType Container) {
-        Get-ChildItem -LiteralPath $dataDir -Recurse -File |
-            Sort-Object FullName |
-            ForEach-Object { $files.Add($_.FullName) }
-        Write-Host "[Adaptive Extractor] Including raw data corpus: 03_data" -ForegroundColor Cyan
+    $dataDir = Join-Path $projectRoot '03_data'
+    if (-not (Test-Path -LiteralPath $dataDir -PathType Container)) {
+        throw "Required raw data corpus not found: $dataDir. Use -ExcludeData only for an intentional code-only archive."
     }
+    $dataFiles = @(Get-ChildItem -LiteralPath $dataDir -Recurse -File |
+        Where-Object { $_.Extension.ToLowerInvariant() -in @('.csv', '.xlsx', '.xls') } |
+        Sort-Object FullName)
+    if ($dataFiles.Count -eq 0) {
+        throw "Raw data corpus is empty: $dataDir"
+    }
+    $dataFiles | ForEach-Object { $files.Add($_.FullName) }
+    Write-Host "[Framework Export] Including raw data corpus: 03_data ($($dataFiles.Count) files)" -ForegroundColor Cyan
 } else {
-    Write-Host "[Adaptive Extractor] Excluding data SQL and corpus files (-ExcludeData specified)" -ForegroundColor Yellow
+    Write-Host '[Framework Export] Excluding SQLite datastore and raw corpus (-ExcludeData specified)' -ForegroundColor Yellow
 }
 
 # Filter out duplicate entries and the destination zip itself if inside project root
@@ -169,11 +205,17 @@ foreach ($f in $files) {
     }
 }
 
+$oversized = @($uniqueFiles | Where-Object { $_.Length -ge 100000000 })
+if ($oversized.Count -gt 0) {
+    $details = $oversized | ForEach-Object { "{0} ({1} bytes)" -f $_.FullName, $_.Length }
+    throw "Archive contains files at or above GitHub's 100,000,000-byte limit:`n$($details -join "`n")"
+}
+
 $relativeManifest = $uniqueFiles |
     ForEach-Object { $_.Substring($rootPrefix.Length).Replace('\', '/') } |
     Sort-Object
 
-Write-Host "PNMF adaptive framework export manifest ($($relativeManifest.Count) files):"
+Write-Host "PNMF clean framework export manifest ($($relativeManifest.Count) runtime/data files):"
 $relativeManifest | ForEach-Object { Write-Host "  $_" }
 Write-Host "Destination: $destinationPath"
 
@@ -206,6 +248,20 @@ try {
         Copy-Item -LiteralPath $source -Destination $target -Force
     }
 
+    $manifestLines = @(
+        'PNMF framework package',
+        "Generated UTC: $([DateTime]::UtcNow.ToString('o'))",
+        "Data included: $shouldIncludeData",
+        '',
+        'SHA256  Path'
+    )
+    foreach ($relative in $relativeManifest) {
+        $stagedPath = Join-Path $stageTop ($relative.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
+        $hash = Get-Sha256Hex -Path $stagedPath
+        $manifestLines += "$hash  $relative"
+    }
+    $manifestLines | Set-Content -LiteralPath (Join-Path $stageTop 'PACKAGE_MANIFEST.txt') -Encoding UTF8
+
     if ($PSCmdlet.ShouldProcess($destinationPath, 'Create PNMF framework archive')) {
         if (Test-Path -LiteralPath $destinationPath) {
             Remove-Item -LiteralPath $destinationPath -Force
@@ -213,7 +269,7 @@ try {
         Compress-Archive -LiteralPath $stageTop -DestinationPath $destinationPath -CompressionLevel Optimal
         $archive = Get-Item -LiteralPath $destinationPath
         Write-Host "Created $($archive.FullName) ($([math]::Round($archive.Length / 1KB, 1)) KiB)." -ForegroundColor Green
-        Write-Host "Included $($relativeManifest.Count) adaptive files under $topLevelName/." -ForegroundColor Green
+        Write-Host "Included $($relativeManifest.Count) runtime/data files plus PACKAGE_MANIFEST.txt under $topLevelName/." -ForegroundColor Green
     }
 }
 finally {

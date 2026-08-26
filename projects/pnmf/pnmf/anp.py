@@ -51,6 +51,7 @@ class ANPDatabase:
             db_path = os.path.join(self.root, "anp_data.sqlite")
         self._sqlite = sqlite3.connect(db_path) if os.path.exists(db_path) else None
         try:
+            self._validate_runtime_contract()
             self.aircraft = self._table("ANP2_3_Aircraft.csv")
             self.npd = self._table("ANP2_3_NPD_data.csv")
             self.jet_coeffs = self._table("ANP2_3_Jet_engine_coefficients.csv")
@@ -67,8 +68,39 @@ class ANPDatabase:
                 self._sqlite.close()
                 self._sqlite = None
         self._clean()
+        if set(self.aircraft["Engine Type"].dropna().astype(str)) != {"Jet"}:
+            raise DataIntegrityError(
+                "datastore is not Jet-only; rebuild with pnmf_cli.py datastore"
+            )
         if require_v63:
             self._require_v63_training_data()
+
+    def _validate_runtime_contract(self) -> None:
+        if self._sqlite is None:
+            raise DataIntegrityError(
+                "canonical Jet-only datastore is missing; run pnmf_cli.py datastore"
+            )
+        exists = self._sqlite.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='anp_meta'"
+        ).fetchone()
+        if not exists:
+            raise DataIntegrityError(
+                "datastore has no runtime population manifest; rebuild with "
+                "pnmf_cli.py datastore"
+            )
+        row = self._sqlite.execute("SELECT * FROM anp_meta LIMIT 1").fetchone()
+        columns = [item[1] for item in self._sqlite.execute(
+            "PRAGMA table_info(anp_meta)"
+        ).fetchall()]
+        metadata = dict(zip(columns, row)) if row is not None else {}
+        if metadata.get("population_scope") != POPULATION_SCOPE:
+            raise DataIntegrityError(
+                "datastore is not Jet-only; rebuild with pnmf_cli.py datastore"
+            )
+        if int(metadata.get("schema_version", -1)) != DATASTORE_SCHEMA_VERSION:
+            raise DataIntegrityError(
+                "stale datastore schema; rebuild with pnmf_cli.py datastore"
+            )
 
     # overloads: required tables can never come back None (a missing one
     # raises), so only the required=False path is Optional
@@ -181,6 +213,7 @@ class ANPDatabase:
             "metrics": sorted(self.npd['Noise Metric'].unique().tolist()),
             "op_modes": sorted(self.npd['Op Mode'].unique().tolist()),
             "engine_types": self.aircraft['Engine Type'].value_counts().to_dict(),
+            "population_scope": POPULATION_SCOPE,
         }
         if "source_dataset" in self.npd:
             result["npd_rows_by_source"] = (
@@ -311,15 +344,30 @@ Two hard rules keep real and generated data apart ("no false data"):
 """
 import contextlib
 import datetime
+import hashlib
 import json
 import os
+import shutil
 import sqlite3
+import tempfile
 
 import numpy as np
 import pandas as pd
 
 
 DB_FILENAME = "anp_data.sqlite"
+DATASTORE_SCHEMA_VERSION = 2
+POPULATION_SCOPE = "jet_only"
+SOURCE_URLS = {
+    "legacy_v2.3": (
+        "https://www.easa.europa.eu/en/domains/environment/"
+        "policy-support-and-research/aircraft-noise-and-performance-anp-data"
+    ),
+    "supplement_v6.3": (
+        "https://www.easa.europa.eu/en/domains/environment/"
+        "policy-support-and-research/aircraft-noise-and-performance-anp-data"
+    ),
+}
 
 #: CSV file -> sqlite table. Same set (and required-ness) as ANPDatabase.
 CSV_TABLES = {
@@ -420,6 +468,44 @@ def _normalise_raw(df: pd.DataFrame, source: str, filename: str) -> pd.DataFrame
     return df
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _source_ledger(root: Path, manifest: list[dict]) -> list[dict]:
+    known = {(row["source_dataset"], row["source_file"]) for row in manifest}
+    records = list(manifest)
+    for source, config in RAW_SOURCES.items():
+        source_dir = root / "03_data" / config["directory"]
+        if not source_dir.is_dir():
+            continue
+        table_by_file = {
+            filename: CSV_TABLES[logical_name]
+            for logical_name, filename in config["files"].items()
+        }
+        for path in sorted(source_dir.iterdir()):
+            if not path.is_file() or (source, path.name) in known:
+                continue
+            records.append({
+                "logical_table": table_by_file.get(path.name, "source_file"),
+                "source_dataset": source,
+                "source_file": path.name,
+                "source_rows": None,
+                "combined_rows": None,
+                "duplicates_removed_total": None,
+                "merge_key": None,
+                "duplicate_policy": "supplement_v6.3_wins",
+                "source_release": source,
+                "source_url": SOURCE_URLS[source],
+                "source_sha256": _sha256_file(path),
+            })
+    return records
+
+
 def _load_raw_sources(root: Path, expect_v63: bool) -> tuple[dict, list]:
     data_root = root / "03_data"
     loaded: dict[str, list[pd.DataFrame]] = {
@@ -452,6 +538,9 @@ def _load_raw_sources(root: Path, expect_v63: bool) -> tuple[dict, list]:
                 "source_dataset": source,
                 "source_file": filename,
                 "source_rows": len(df),
+                "source_release": source,
+                "source_url": SOURCE_URLS[source],
+                "source_sha256": _sha256_file(path),
             })
     if expect_v63:
         v63_npd = [
@@ -499,6 +588,82 @@ def _merge_sources(loaded: dict, manifest: list) -> dict[str, pd.DataFrame]:
     return merged
 
 
+def _jet_only_tables(
+    merged: dict[str, pd.DataFrame], manifest: list[dict]
+) -> tuple[dict[str, pd.DataFrame], list[dict]]:
+    aircraft_name = "ANP2_3_Aircraft.csv"
+    npd_name = "ANP2_3_NPD_data.csv"
+    aircraft = merged[aircraft_name]
+    npd = merged[npd_name]
+    jet_aircraft = aircraft.loc[
+        aircraft["Engine Type"].astype("string").eq("Jet")
+    ].copy()
+    jet_acft_ids = set(jet_aircraft["ACFT_ID"].dropna().astype(str))
+    candidate_ids = set(jet_aircraft["NPD_ID"].dropna().astype(str))
+    task_pairs = {
+        (metric, mode)
+        for metric in ("SEL", "LAmax", "EPNL", "PNLTM")
+        for mode in ("A", "D")
+    }
+    npd = npd.loc[npd["NPD_ID"].astype(str).isin(candidate_ids)].copy()
+    complete_ids = {
+        str(npd_id)
+        for npd_id, group in npd.groupby("NPD_ID", sort=True)
+        if set(zip(group["Noise Metric"], group["Op Mode"])) == task_pairs
+    }
+    descriptors = jet_aircraft.loc[
+        jet_aircraft["NPD_ID"].astype(str).isin(complete_ids)
+    ]
+    unsupported = descriptors.loc[
+        descriptors["Power Parameter"].astype(str) != "CNT (lb)"
+    ]
+    if not unsupported.empty:
+        raise DataIntegrityError(
+            "Jet runtime contains unsupported power parameters: "
+            + ", ".join(sorted(unsupported["Power Parameter"].astype(str).unique()))
+        )
+    selected_ids = set(descriptors["NPD_ID"].dropna().astype(str))
+    result: dict[str, pd.DataFrame] = {}
+    for logical_name, frame in merged.items():
+        if logical_name == "ANP2_3_Propeller_engine_coefficients.csv":
+            continue
+        filtered = frame.copy()
+        if logical_name == aircraft_name:
+            filtered = jet_aircraft.loc[
+                jet_aircraft["NPD_ID"].astype(str).isin(selected_ids)
+            ].copy()
+        elif logical_name == npd_name:
+            filtered = npd.loc[
+                npd["NPD_ID"].astype(str).isin(selected_ids)
+            ].copy()
+        elif "ACFT_ID" in filtered.columns:
+            filtered = filtered.loc[
+                filtered["ACFT_ID"].astype(str).isin(jet_acft_ids)
+            ].copy()
+        result[logical_name] = filtered.reset_index(drop=True)
+    exclusions = []
+    for logical_name, frame in merged.items():
+        if logical_name not in result:
+            exclusions.append({
+                "logical_table": CSV_TABLES[logical_name],
+                "reason": "non-Jet runtime table excluded",
+                "source_rows": len(frame),
+                "excluded_rows": len(frame),
+            })
+            continue
+        before = len(frame)
+        after = len(result[logical_name])
+        if before != after:
+            exclusions.append({
+                "logical_table": CSV_TABLES[logical_name],
+                "reason": "non-Jet or incomplete Jet rows excluded",
+                "source_rows": before,
+                "excluded_rows": before - after,
+            })
+    manifest.extend(exclusions)
+    return result, manifest
+
+
 def _validate_truth(merged: dict, expect_v63: bool) -> None:
     for required in REQUIRED_CSVS:
         if required not in merged or merged[required].empty:
@@ -525,6 +690,83 @@ def _validate_truth(merged: dict, expect_v63: bool) -> None:
                 "v6.3 NPD rows lost their v6.3 aircraft descriptors")
 
 
+def _read_jet_predictions(db_target: Path) -> dict[str, pd.DataFrame]:
+    if not db_target.exists():
+        return {"aircraft": pd.DataFrame(), "npd": pd.DataFrame()}
+    try:
+        with sqlite3.connect(db_target) as conn:
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            if not {"predicted_aircraft", "predicted_npd"}.issubset(tables):
+                return {"aircraft": pd.DataFrame(), "npd": pd.DataFrame()}
+            aircraft = pd.read_sql_query("SELECT * FROM predicted_aircraft", conn)
+            npd = pd.read_sql_query("SELECT * FROM predicted_npd", conn)
+    except sqlite3.DatabaseError:
+        return {"aircraft": pd.DataFrame(), "npd": pd.DataFrame()}
+    if "engine_type" not in aircraft.columns:
+        return {"aircraft": pd.DataFrame(), "npd": pd.DataFrame()}
+    retained = aircraft.loc[
+        aircraft["engine_type"].astype("string").eq("Jet")
+    ].copy()
+    keys = retained[["name", "model"]]
+    if keys.empty:
+        npd = npd.iloc[0:0].copy()
+    else:
+        npd = npd.merge(keys, on=["name", "model"], how="inner")
+    return {"aircraft": retained, "npd": npd}
+
+
+def _write_predictions(conn: sqlite3.Connection,
+                       predictions: dict[str, pd.DataFrame]) -> None:
+    conn.execute(_AIRCRAFT_DDL)
+    conn.execute(_NPD_DDL)
+    for table, frame in predictions.items():
+        if not frame.empty:
+            frame.to_sql(
+                "predicted_aircraft" if table == "aircraft" else "predicted_npd",
+                conn,
+                if_exists="append",
+                index=False,
+            )
+
+
+def _prediction_rebuild_manifest(
+    db_target: Path, predictions: dict[str, pd.DataFrame]
+) -> list[dict[str, str | int]]:
+    before = {"aircraft": 0, "npd": 0}
+    if db_target.exists():
+        try:
+            with sqlite3.connect(db_target) as conn:
+                tables = {
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    ).fetchall()
+                }
+                for key, table in (("aircraft", "predicted_aircraft"), ("npd", "predicted_npd")):
+                    if table in tables:
+                        before[key] = int(
+                            conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                        )
+        except sqlite3.DatabaseError:
+            before = {"aircraft": 0, "npd": 0}
+    rows = []
+    for key, table in (("aircraft", "predicted_aircraft"), ("npd", "predicted_npd")):
+        retained = int(len(predictions[key]))
+        rows.append({
+            "entity": table,
+            "before_rows": before[key],
+            "retained_jet_rows": retained,
+            "discarded_non_jet_rows": before[key] - retained,
+            "discard_reason": "engine_type != Jet",
+        })
+    return rows
+
+
 def build_datastore(root: str | os.PathLike | None = None,
                     db_path: str | os.PathLike | None = None,
                     *, expect_v63: bool = True) -> str:
@@ -544,23 +786,65 @@ def build_datastore(root: str | os.PathLike | None = None,
                      else root_path / candidate).resolve()
     loaded, manifest = _load_raw_sources(root_path, expect_v63)
     merged = _merge_sources(loaded, manifest)
+    manifest = _source_ledger(root_path, manifest)
+    merged, manifest = _jet_only_tables(merged, manifest)
     _validate_truth(merged, expect_v63)
     counts = {}
-    with contextlib.closing(sqlite3.connect(db_target)) as conn, conn:
-        for logical_name, df in merged.items():
-            table = CSV_TABLES[logical_name]
-            df.to_sql(table, conn, if_exists="replace", index=False)
-            counts[table] = len(df)
-        pd.DataFrame(manifest).to_sql(
-            "anp_dataset_manifest", conn, if_exists="replace", index=False)
-        meta = pd.DataFrame([{
-            "created_utc": _utcnow(),
-            "source": "EASA ANP legacy v2.3 + v6.3 CSV supplement",
-            "tables": json.dumps(counts, sort_keys=True),
-            "expect_v63": int(expect_v63),
-            "duplicate_policy": "supplement_v6.3_wins",
-        }])
-        meta.to_sql("anp_meta", conn, if_exists="replace", index=False)
+    db_target.parent.mkdir(parents=True, exist_ok=True)
+    predictions = _read_jet_predictions(db_target)
+    prediction_manifest = _prediction_rebuild_manifest(db_target, predictions)
+    handle, temporary_name = tempfile.mkstemp(
+        prefix=f".{db_target.stem}.", suffix=".sqlite.tmp",
+        dir=db_target.parent,
+    )
+    os.close(handle)
+    temporary_path = Path(temporary_name)
+    try:
+        with contextlib.closing(sqlite3.connect(temporary_path)) as conn, conn:
+            for logical_name, df in merged.items():
+                table = CSV_TABLES[logical_name]
+                df.to_sql(table, conn, if_exists="replace", index=False)
+                counts[table] = len(df)
+            pd.DataFrame(manifest).to_sql(
+                "anp_dataset_manifest", conn, if_exists="replace", index=False)
+            exclusion_rows = [
+                row for row in manifest if "excluded_rows" in row
+            ]
+            pd.DataFrame(exclusion_rows).to_sql(
+                "anp_exclusion_manifest", conn, if_exists="replace", index=False
+            )
+            pd.DataFrame(prediction_manifest).to_sql(
+                "anp_prediction_rebuild_manifest", conn,
+                if_exists="replace", index=False,
+            )
+            source_hashes = {
+                f"{row.get('source_dataset')}:{row.get('source_file')}": row.get(
+                    "source_sha256"
+                )
+                for row in manifest
+                if row.get("source_sha256")
+            }
+            meta = pd.DataFrame([{
+                "created_utc": _utcnow(),
+                "source": "EASA ANP legacy v2.3 + v6.3 CSV supplement",
+                "tables": json.dumps(counts, sort_keys=True),
+                "expect_v63": int(expect_v63),
+                "duplicate_policy": "supplement_v6.3_wins",
+                "schema_version": DATASTORE_SCHEMA_VERSION,
+                "population_scope": POPULATION_SCOPE,
+                "engine_type": "Jet",
+                "source_hashes": json.dumps(source_hashes, sort_keys=True),
+            }])
+            meta.to_sql("anp_meta", conn, if_exists="replace", index=False)
+            _write_predictions(conn, predictions)
+        try:
+            os.replace(temporary_path, db_target)
+        except PermissionError:
+            shutil.copyfile(temporary_path, db_target)
+            temporary_path.unlink()
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
     return str(db_target)
 
 
@@ -628,6 +912,8 @@ _AIRCRAFT_DDL = """CREATE TABLE IF NOT EXISTS predicted_aircraft (
     max_static_thrust_lb REAL, mtow_lb REAL, mlw_lb REAL,
     bypass_ratio REAL, noise_chapter INTEGER,
     qa_status TEXT, physics_crosscheck TEXT, created_utc TEXT,
+    feature_schema TEXT, training_population TEXT,
+    validation_report_sha256 TEXT,
     PRIMARY KEY (name, model)
 )"""
 
@@ -655,12 +941,20 @@ class PredictionStore:
         conn = sqlite3.connect(self.db_path)
         conn.execute(_AIRCRAFT_DDL)
         conn.execute(_NPD_DDL)
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(predicted_aircraft)")
+        }
+        for name in ("feature_schema", "training_population",
+                     "validation_report_sha256"):
+            if name not in columns:
+                conn.execute(f"ALTER TABLE predicted_aircraft ADD COLUMN {name} TEXT")
         return conn
 
     # ---- write -----------------------------------------------------------
     def add(self, aircraft, tables: dict, uncertainty: dict | None = None,
-            model: str = "rf", crosscheck: dict | None = None,
-            replace: bool = True):
+            model: str = "et-jet_merged-jet-v2", crosscheck: dict | None = None,
+            replace: bool = True, metadata: dict | None = None):
         """Store the predicted NPD tables for one aircraft, gated by qa_check.
 
         aircraft    : ParametricAircraft
@@ -670,8 +964,11 @@ class PredictionStore:
         Returns {(metric, op_mode): (status, reasons)}; rejected tables are
         NOT written. The aircraft row records the worst status of its tables.
         """
+        if aircraft.engine_type != "Jet":
+            raise ValueError("PredictionStore accepts Jet aircraft only")
         uncertainty = uncertainty or {}
         crosscheck = crosscheck or {}
+        metadata = metadata or {}
         now = _utcnow()
         results, npd_rows = {}, []
         for (metric, om), tbl in tables.items():
@@ -724,6 +1021,11 @@ class PredictionStore:
                     "physics_crosscheck": json.dumps(
                         {k: round(float(v), 3) for k, v in crosscheck.items()}),
                     "created_utc": now,
+                    "feature_schema": metadata.get("feature_schema"),
+                    "training_population": metadata.get("training_population"),
+                    "validation_report_sha256": metadata.get(
+                        "validation_report_sha256"
+                    ),
                 }
                 pd.DataFrame([ac_row]).to_sql("predicted_aircraft", conn,
                                               if_exists="append", index=False)

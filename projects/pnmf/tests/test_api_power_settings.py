@@ -12,6 +12,19 @@ from pnmf.core import NPDTable, ParametricAircraft
 
 def _predictor():
     predictor = NoisePredictor.__new__(NoisePredictor)
+    predictor.training_scope = "verified"
+    predictor.training_metadata = {}
+    predictor.input_envelope = {
+        "per_type": {
+            "Jet": {
+                "thr": (20_000.0, 40_000.0, 10_000.0, 50_000.0),
+                "mtow": (100_000.0, 300_000.0, 50_000.0, 400_000.0),
+                "tw": (0.1, 0.8, 0.05, 1.0),
+                "mlw_mtow": (0.6, 1.0, 0.5, 1.1),
+                "n_set": [2, 4],
+            }
+        }
+    }
     predictor._combos = [("SEL", "D"), ("SEL", "A"), ("LAmax", "D")]
     predictor._default_power = lambda aircraft, mode: (
         np.array([20000.0, 30000.0]) if mode == "D"
@@ -28,7 +41,8 @@ def _predictor():
 
 
 def _aircraft():
-    return ParametricAircraft("TEST", "Jet", 2, 32000.0)
+    return ParametricAircraft(name="TEST", n_engines=2,
+                              max_static_thrust_lb=32000.0)
 
 
 def test_default_power_grids_are_preserved():
@@ -75,6 +89,34 @@ def test_prediction_progress_callback_reports_every_combo():
     assert all(item["distances"] == 10 for item in done)
     assert events[-1] == (
         "prediction_done", {"tables": 3, "aircraft": "TEST"})
+
+
+def test_prediction_rejects_physically_unsupported_aircraft_before_model_use():
+    aircraft = ParametricAircraft(
+        name="IMPOSSIBLE",
+        n_engines=4,
+        max_static_thrust_lb=200_000.0,
+        mtow_lb=30_000.0,
+        mlw_lb=25_000.0,
+    )
+
+    with pytest.raises(ValueError, match="supported Jet input envelope"):
+        _predictor().predict(aircraft)
+
+
+def test_prediction_metadata_records_non_blocking_support_warnings():
+    aircraft = ParametricAircraft(name="UNUSUAL", n_engines=3)
+
+    result = _predictor().predict(aircraft)
+
+    assert result.metadata["input_findings"] == [
+        {
+            "level": "warning",
+            "field": "n_engines",
+            "message": "3 engines is not seen on any 'Jet' in the fleet "
+            "(seen: [2, 4]).",
+        }
+    ]
 
 
 @pytest.mark.parametrize("grid", [[], [0], [-1], [np.nan], [np.inf], [1, 1]])

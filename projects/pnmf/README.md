@@ -5,13 +5,13 @@ Noise-Power-Distance tables for conceptual screening.
 
 ## INPUT -> FORMULAS -> OUTPUT
 
-**INPUT.** Each learned sample is a 12-value vector:
+**INPUT.** Each Jet learned sample is a 9-value vector:
 
-`x = [engine-type one-hot (3), engine count, log10(MTOW), log10(MLW),
-MLW/MTOW, log10(thrust/engine), log10(total thrust), noise chapter,
+`x = [engine count, log10(MTOW), log10(MLW), MLW/MTOW,
+log10(thrust/engine), log10(total thrust), noise chapter,
 log10(unit-corrected power), throttle]`.
 
-**FORMULAS.** For each metric/mode, an Extra Trees or Random Forest ensemble
+**FORMULAS.** For each metric/mode, the production Extra Trees ensemble
 predicts all ten distances jointly:
 
 `L_hat(x) = (1/T) sum(t_i(x))`.
@@ -37,11 +37,11 @@ all eight tasks: SEL, LAmax, EPNL, and PNLTM for approach and departure.
 
 ## Basic architecture
 
-1. **Data build:** merge the 155-record legacy v2.3 fleet with the 11-record
-   v6.3 supplement. The combined corpus has 166 aircraft records (165 unique
-   ACFT_IDs), 122 NPD sets, and 3,196 NPD rows.
-2. **Learned prediction:** train Extra Trees (`et`, default) or Random Forest
-   (`rf`) on the combined truth corpus.
+1. **Data build:** rebuild a Jet-only runtime from immutable EASA v2.3 and
+   v6.3 sources: 136 aircraft rows, 135 unique ACFT_IDs, 94 complete curves,
+   2,664 NPD rows, and 93 aircraft groups.
+2. **Learned prediction:** train Extra Trees on the frozen nine-feature Jet
+   schema and complete Jet population. Random Forest is validation-only.
 3. **Physics cross-check:** run the independent component-source
    `PhysicsNPDModel` for SEL/LAmax using explicit bypass-ratio and geometry
    assumptions.
@@ -49,12 +49,12 @@ all eight tasks: SEL, LAmax, EPNL, and PNLTM for approach and departure.
    store accepted predictions only in `predicted_*` tables.
 
 The Streamlit **Aircraft Designer** now owns the complete workflow. Select one
-shared preset or custom aircraft, then choose **Learned ET/RF only**,
+shared Jet preset or custom aircraft, then choose **Learned ET only**,
 **Component physics only**, or **Compare learned + physics**. Compare mode runs
-ET/RF for the shared aircraft and places exact event thrust, distance,
+ET for the shared aircraft and places exact event thrust, distance,
 airframe/configuration, atmosphere and optional engine-deck physics inputs
 directly below it. The resulting SEL/LAmax curves are overlaid at identical
-thrust and distance coordinates. ET/RF remains an output comparison and never
+thrust and distance coordinates. ET remains an output comparison and never
 feeds the physics calculation.
 
 Both run buttons expose a live calculation log. The learned log identifies
@@ -94,18 +94,18 @@ standard Windows `py` launcher is the only prerequisite.
 ## Supported workflows
 
 ```powershell
-.\pnmf.ps1 compare
-.\pnmf.ps1 validate SEL:D SEL:A
-.\pnmf.ps1 validate-model --folds 3 --seed 20260724
-.\pnmf.ps1 predict --model et --dry-run
-.\pnmf.ps1 predict --model rf --dry-run
+.\pnmf.ps1 validate-jet-model
+.\pnmf.ps1 validate-jet-reference
+.\pnmf.ps1 verify-doc29-reference --workbook <official-workbook> --sha256 <sha256>
+.\pnmf.ps1 predict --dry-run
 .\pnmf.ps1 physics
 .\pnmf.ps1 ui
 ```
 
-Extra Trees and Random Forest are the only supported learned models.
-`PhysicsNPDModel` is an independent scientific cross-check, not a third
-regression model. Physics does not calculate EPNL/PNLTM tone corrections.
+Extra Trees is the sole production learner. Random Forest appears only in the
+read-only validation evidence. `PhysicsNPDModel` is an independent scientific
+cross-check, not a competing learner. Physics does not calculate EPNL/PNLTM
+tone corrections.
 
 ## CI and full-data validation
 
@@ -114,9 +114,9 @@ GitHub Actions runs only tracked-source compilation/import checks and
 Raw ANP sources, `anp_data.sqlite`, and generated outputs remain ignored and
 are intentionally unavailable in a clean hosted checkout.
 
-The full local suite and `validate-model` require the provisioned v2.3/v6.3
+The full local suite and Jet validation require the provisioned v2.3/v6.3
 corpus. Current full-data protocols, results, input hashes, and limitations are
-recorded in [MODEL_TRAINING_REPORT](docs/MODEL_TRAINING_REPORT.md).
+recorded in [JET_MODEL_METHODOLOGY_AND_VALIDATION_REPORT](../../docs/JET_MODEL_METHODOLOGY_AND_VALIDATION_REPORT.md).
 
 See [HOW_IT_WORKS](docs/HOW_IT_WORKS.md), [NPD design](docs/NPD_SYSTEM_DESIGN.md),
 the [migration progress report](docs/MIGRATION_PROGRESS_REPORT.md), and the

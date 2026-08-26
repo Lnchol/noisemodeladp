@@ -10,8 +10,8 @@ cross-check.
     result.to_anp_csv("out.csv")             # strict ANP layout
     result.crosscheck_physics(bpr=15.0)      # {metric: mean |delta| dB}
 
-The winning predictor (see pnmf_cli.py compare) is fitted for every
-metric/op-mode combination up front. crosscheck_physics runs the fully
+The Jet-only Extra Trees predictor is fitted for every metric/op-mode
+combination up front. crosscheck_physics runs the fully
 independent PhysicsNPDModel route (calibrated once on the A320-211, exactly as
 pnmf_cli.py physics) and compares OUTPUTS only - the two routes share no
 fitting.
@@ -23,23 +23,25 @@ import numpy as np
 import pandas as pd
 
 from .anp import ANPDatabase, DIST_COLS, qa_check
-from .core import ParametricAircraft
-from .core import NPDTable
+from .core import (
+    NPDTable,
+    ParametricAircraft,
+    evaluate_aircraft_inputs,
+    fleet_input_envelope,
+)
 from .models import SurrogateNPDModel
+from .physics_calibration import load_calibrated_model
 from .physics import PhysicsNPDModel, PhysicsDesign
 
-# Winner of the 2026-07-15 legacy-corpus leave-one-aircraft-out bake-off:
-# ET 2.99 dB vs RF 3.04 dB mean per-aircraft median RMSE. Expanded-corpus
-# results are validation evidence, not a reason to change this default silently.
 DEFAULT_MODEL = "et"
-_CALIBRATION_ACFT = "A320-211"
-_CALIBRATION_BPR = 6.0
 _PHYSICS_METRICS = ("SEL", "LAmax")   # physics route scope (no EPNL/PNLTM)
 
-_FACTORIES = {
-    "rf":      lambda rs: SurrogateNPDModel("rf", random_state=rs),
-    "et":      lambda rs: SurrogateNPDModel("et", random_state=rs),
-}
+def prediction_model_identity(
+    model: str = DEFAULT_MODEL, training_scope: str = "jet_merged"
+) -> str:
+    if model != DEFAULT_MODEL or training_scope != "jet_merged":
+        raise ValueError("production identity is fixed and cannot be selected")
+    return "et-jet_merged-jet-v2"
 
 
 def canonical_power_grid(power_settings):
@@ -72,6 +74,7 @@ class NoisePrediction:
     aircraft: ParametricAircraft
     tables: dict          # (metric, op_mode) -> NPDTable
     uncertainty: dict     # (metric, op_mode) -> (P,10) std array or None
+    metadata: dict = field(default_factory=dict)
     _predictor: "NoisePredictor | None" = field(repr=False, default=None)
 
     def to_anp_csv(self, path):
@@ -96,9 +99,19 @@ class NoisePrediction:
         for the physics-scope metrics (SEL, LAmax; EPNL is out of physics
         scope). bpr defaults to the aircraft's bypass_ratio (else 6.0)."""
         if bpr is None:
-            bpr = self.aircraft.bypass_ratio or _CALIBRATION_BPR
+            bpr = self.aircraft.bypass_ratio or 6.0
         assert self._predictor is not None  # set by NoisePredictor.predict
         phys = self._predictor._calibrated_physics()
+        calibration = self._predictor.physics_calibration_artifact
+        if calibration is not None:
+            self.metadata["physics_calibration"] = {
+                "schema_version": calibration["schema_version"],
+                "anchor": calibration["anchor"],
+                "parameters": calibration["parameters"],
+                "metrics": calibration["metrics"],
+                "source_hashes": calibration["source_hashes"],
+                "code_revision": calibration["code_revision"],
+            }
         ac = self.aircraft
         des = PhysicsDesign(ac.name, ac.n_engines, ac.max_static_thrust_lb,
                             bpr, ac.mtow_lb, wing_area_m2=ac.wing_area_m2,
@@ -143,25 +156,25 @@ class NoisePrediction:
 
 
 class NoisePredictor:
-    """One-call NPD noise predictor. Fits the winning model for every
-    metric/op-mode combination on construction."""
-
-    def __init__(self, root=".", model=DEFAULT_MODEL,
+    def __init__(self, root=".",
                  metrics=("SEL", "LAmax", "EPNL", "PNLTM"),
                  op_modes=("A", "D"), random_state=0):
-        if model not in _FACTORIES:
-            raise ValueError(f"unknown model {model!r}; choose from "
-                             f"{sorted(_FACTORIES)}. PhysicsNPDModel is a "
-                             "separate component-physics cross-check.")
         self.db = ANPDatabase(root)
-        self.model_name = model
+        self.input_envelope = fleet_input_envelope(self.db.aircraft)
+        self.model_name = DEFAULT_MODEL
+        self.training_scope = "jet_merged"
         self.metrics = tuple(metrics)
         self.op_modes = tuple(op_modes)
-        self.model = _FACTORIES[model](random_state)
+        self.model = SurrogateNPDModel(random_state=random_state)
         self.model.fit_all(self.db, metrics=self.metrics, op_modes=self.op_modes)
+        self.training_metadata = dict(self.model.training_metadata)
+        self.training_metadata["model_identity"] = prediction_model_identity(
+            DEFAULT_MODEL, "jet_merged"
+        )
         self._combos = [(m, om) for m in self.metrics for om in self.op_modes
                         if self.db.list_curve_sets(m, om)]
-        self._physics = None      # lazily calibrated on first cross-check
+        self._physics = None
+        self.physics_calibration_artifact = None
 
     # ---- default per-mode power grid (lb, per engine) -------------------
     def _default_power(self, aircraft, op_mode):
@@ -171,8 +184,6 @@ class NoisePredictor:
         return np.round(np.linspace(0.07 * T, 0.35 * T, 3))
 
     def _predict_one(self, aircraft, metric, om, P):
-        """Predict one table, capturing cross-tree std when the model exposes
-        it (RF-based models); semi-empirical returns std=None."""
         try:
             out = self.model.predict_table(aircraft, metric, om, P,
                                            return_std=True,
@@ -202,7 +213,24 @@ class NoisePredictor:
         ``(event_name, details_dict)`` before and after each metric/operation
         table. It does not affect model inputs or results."""
         if aircraft is None:
+            supplied_engine_type = kwargs.pop("engine_type", "Jet")
+            if supplied_engine_type != "Jet":
+                raise ValueError(
+                    "Jet-only production prediction accepts Jet aircraft only"
+                )
             aircraft = ParametricAircraft(**kwargs)
+        if aircraft.engine_type != "Jet":
+            raise ValueError("Jet-only production prediction accepts Jet aircraft only")
+        input_findings = evaluate_aircraft_inputs(aircraft, self.input_envelope)
+        input_errors = [
+            finding["message"] for finding in input_findings
+            if finding["level"] == "error"
+        ]
+        if input_errors:
+            raise ValueError(
+                "aircraft is outside the supported Jet input envelope: "
+                + " ".join(input_errors)
+            )
         tables, unc = {}, {}
         total = len(self._combos)
         for index, (metric, om) in enumerate(self._combos, start=1):
@@ -232,14 +260,15 @@ class NoisePredictor:
             progress_callback(
                 "prediction_done",
                 {"tables": len(tables), "aircraft": aircraft.name})
-        return NoisePrediction(aircraft, tables, unc, _predictor=self)
+        metadata = dict(getattr(self, "training_metadata", {}))
+        metadata["input_findings"] = input_findings
+        return NoisePrediction(
+            aircraft, tables, unc, metadata=metadata, _predictor=self)
 
     def _calibrated_physics(self):
         if self._physics is None:
-            m = PhysicsNPDModel()
-            m.calibrate(self.db, _CALIBRATION_ACFT, bpr=_CALIBRATION_BPR,
-                        verbose=False)
-            self._physics = m
+            self._physics, self.physics_calibration_artifact = \
+                load_calibrated_model()
         return self._physics
 
 

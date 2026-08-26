@@ -10,6 +10,7 @@ and form inputs across Streamlit reruns.
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import sqlite3
@@ -23,13 +24,16 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from pnmf.api import NoisePredictor, real_vs_future_table, DEFAULT_MODEL
+from pnmf.api import (
+    NoisePredictor,
+    real_vs_future_table,
+    prediction_model_identity,
+)
 from pnmf.core import (ParametricAircraft, NPDTable,
-                       STANDARD_DISTANCES_FT, ENGINE_TYPES,
+                       STANDARD_DISTANCES_FT,
                        fleet_input_envelope, evaluate_aircraft_inputs)
 from pnmf.anp import DIST_COLS, ANPDatabase, qa_check, PredictionStore
 from pnmf.operations import DepartureSynthesizer
-from pnmf.models import rank_models
 from pnmf.physics import (
     AirframePhysicalInputs,
     AtmosphericPhysicalInputs,
@@ -43,7 +47,8 @@ from pnmf.physics_presets import PHYSICS_PRESETS
 PROJECT_ROOT = Path(__file__).resolve().parent
 os.chdir(PROJECT_ROOT)
 DB_PATH = str(PROJECT_ROOT / "anp_data.sqlite")
-MODELS = ["et", "rf"]
+PRODUCTION_MODEL = "et"
+PRODUCTION_SCOPE = "jet_merged"
 
 
 def _render_calculation_log(slot, record):
@@ -93,12 +98,7 @@ def _render_saved_calculation_log(key, slot):
 FUTURE_COLOR = "#c53030"         # strong highlight for the future aircraft
 
 MODEL_INFO = {
-    "et": "Extra-Trees surrogate — data-driven ensemble trained on the ANP "
-          "fleet. Current default (2026-07-15 bake-off winner, 2.99 dB mean "
-          "LOO RMSE).",
-    "rf": "Random Forest surrogate — same data-driven family as `et`, "
-          "classic bootstrap-aggregated trees instead of extremely-"
-          "randomized ones.",
+    "et": "Extra Trees production surrogate trained on the complete Jet ANP population.",
 }
 
 GLOSSARY = {
@@ -262,10 +262,9 @@ def get_db(version: str):
 
 
 @st.cache_resource(show_spinner=False)
-def get_predictor(model: str, version: str):
-    """NoisePredictor for (model, version); construction fits the fleet."""
+def get_predictor(version: str):
     _ = version                      # keys the cache; unused in the body
-    return NoisePredictor(".", model=model)
+    return NoisePredictor(".")
 
 
 @st.cache_data(show_spinner=False)
@@ -288,21 +287,10 @@ def load_output_csv(path: str, mtime: float):
     return pd.read_csv(path)
 
 
-_COMPARE_CSV = "outputs/algorithm_comparison.csv"
-
-
 @st.cache_data(show_spinner=False)
-def load_model_ranking(mtime: float):
-    """(ranking_df, info) from the bake-off CSV via pnmf.models.rank_models,
-    cached and keyed by the CSV mtime. Returns None when the CSV is absent or
-    unrankable (needs >=2 fully-scored models)."""
-    _ = mtime                        # keys the cache; unused in the body
-    if not os.path.exists(_COMPARE_CSV):
-        return None
-    try:
-        return rank_models(pd.read_csv(_COMPARE_CSV))
-    except (ValueError, KeyError):
-        return None
+def load_output_json(path: str, mtime: float):
+    _ = mtime
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 # ===========================================================================
@@ -349,6 +337,27 @@ def _label_map(pt):
     return out
 
 
+def _methodology_panel(purpose: str, next_action: str, source: str) -> None:
+    st.caption(f"Purpose: {purpose} Next action: {next_action}")
+    with st.expander("Method, sources, and limitations"):
+        st.markdown(f"**Inputs/source**  {source}")
+        st.markdown(
+            "[EASA ANP source](https://www.easa.europa.eu/en/domains/"
+            "environment/policy-support-and-research/aircraft-noise-and-"
+            "performance-anp-data) · "
+            "[ECAC Doc 29 Volume 3 Part 1](https://www.ecac-ceac.org/"
+            "images/documents/ECAC-Doc_29_4th_edition_Dec_2016_Volume_3_"
+            "Part_1.pdf)"
+        )
+        st.markdown(
+            "**Transformation or method**  The active page uses a fixed, "
+            "Jet-only screening method; learned ET and component physics "
+            "remain independent and never share fitting inputs."
+        )
+        st.markdown("**Output**  Screening NPD tables, diagnostics, or validation evidence with provenance metadata.")
+        st.markdown("**Evidence boundary**  EASA provenance does not establish ML accuracy; results are not certification or unseen-family validation.")
+
+
 def _require_prediction():
     """Shared guard: return the prediction or render an info hint + None.
     Also warns when the prediction is stale versus the current data version."""
@@ -376,7 +385,7 @@ _OPTIONAL_KEYS = ("f_bpr", "f_fan_d", "f_fan_mach", "f_wing_area",
                   "f_wing_span", "f_gear_wheels")
 ANALYSIS_APPROACHES = (
     "Compare learned + physics",
-    "Learned ET/RF only",
+    "Learned ET only",
     "Component physics only",
 )
 
@@ -422,9 +431,7 @@ def _apply_prefill():
     row = get_param_table(version).loc[npd_id]
     ac = ParametricAircraft.from_anp_row(npd_id, row)
     st.session_state["f_name"] = _sanitize_name(f"{row['Description']}-DERIVED")
-    st.session_state["f_engine_type"] = (ac.engine_type
-                                         if ac.engine_type in ENGINE_TYPES
-                                         else "Jet")
+    st.session_state["f_engine_type"] = "Jet"
     st.session_state["f_n_engines"] = int(_clamp(ac.n_engines, 1, 8, 2))
     st.session_state["f_thrust"] = _clamp(ac.max_static_thrust_lb,
                                           50.0, 130000.0, 50.0)
@@ -454,7 +461,7 @@ def _init_designer_state():
     for k in ("f_fan_d", "f_fan_mach", "f_wing_area", "f_wing_span",
               "f_gear_wheels"):
         st.session_state.setdefault(k, None)
-    st.session_state.setdefault("f_model", DEFAULT_MODEL)
+    st.session_state["f_engine_type"] = "Jet"
     st.session_state.setdefault("f_departure_powers", "")
     st.session_state.setdefault("f_approach_powers", "")
     st.session_state.setdefault("f_aircraft_preset", "__custom__")
@@ -480,9 +487,14 @@ def page_designer():
     _init_designer_state()
     version = data_version()
     st.header("Aircraft design")
+    _methodology_panel(
+        "Define one Jet aircraft shared by learned and component-physics routes.",
+        "Enter or select the aircraft, then run the Extra Trees prediction.",
+        "Local EASA ANP v2.3 plus v6.3 Jet-only SQLite runtime; fields are labelled supplied, source-derived, estimated, or unavailable.",
+    )
     st.caption(
         "Choose one aircraft definition, then use that same aircraft for the "
-        "learned ET/RF route, component physics, or a direct comparison.")
+        "learned ET route, component physics, or a direct comparison.")
 
     st.subheader("1. Shared aircraft")
     preset_options = ["__custom__", *PHYSICS_PRESETS]
@@ -506,7 +518,7 @@ def page_designer():
     active_preset = _matching_active_preset(_aircraft_from_state())
     if active_preset is not None:
         st.success(
-            f"Shared aircraft: **{active_preset.label}**. ET/RF and component "
+            f"Shared aircraft: **{active_preset.label}**. ET and component "
             "physics will use this same aircraft definition.")
         with st.expander("Preset sources and estimated fields"):
             for source in active_preset.sources:
@@ -533,7 +545,6 @@ def page_designer():
     st.text_input("Name", key="f_name")
     a, b, c = st.columns(3)
     with a:
-        st.selectbox("Engine type", ENGINE_TYPES, key="f_engine_type")
         st.number_input("Number of engines", min_value=1, max_value=8, step=1,
                         key="f_n_engines")
     with b:
@@ -602,24 +613,22 @@ def page_designer():
         ANALYSIS_APPROACHES,
         horizontal=True,
         key="f_analysis_approach",
-        help="Compare mode overlays independent ET/RF and component-physics "
+        help="Compare mode overlays independent ET and component-physics "
              "noise results for the same aircraft and event.")
-    if approach == "Learned ET/RF only":
-        st.info("Runs the selected tree model and produces NPD tables.")
+    if approach == "Learned ET only":
+        st.info("Runs production Extra Trees and produces NPD tables.")
     elif approach == "Component physics only":
         st.info(
             "Runs the component-source route for SEL/LAmax without displaying "
             "a learned-model overlay.")
     else:
         st.info(
-            "Runs ET/RF first, then exposes component-physics event inputs and "
+            "Runs ET first, then exposes component-physics event inputs and "
             "a same-aircraft noise comparison below.")
 
     # ---- advanced prediction settings -----------------------------------
     with st.expander("Advanced prediction settings"):
-        st.selectbox("Prediction model", MODELS, key="f_model",
-                     help=_model_help())
-        st.caption("Extra Trees (`et`) is the default model. Use custom NPD "
+        st.caption("Extra Trees is the fixed production model. Use custom NPD "
                    "row powers only when a specific engine deck is available.")
         st.caption("Enter comma-separated corrected net thrust values per engine. "
                    "These are NPD table row powers, not the engine's maximum "
@@ -637,7 +646,7 @@ def page_designer():
                       placeholder=app_example)
 
     run_label = {
-        "Learned ET/RF only": "Run learned prediction",
+        "Learned ET only": "Run learned prediction",
         "Component physics only": "Prepare component physics",
         "Compare learned + physics": "Run learned model and prepare comparison",
     }[approach]
@@ -645,19 +654,20 @@ def page_designer():
     learned_log_slot = st.empty()
     if run_clicked:
         ac = _aircraft_from_state()
-        model = st.session_state["f_model"]
+        model = PRODUCTION_MODEL
+        training_scope = PRODUCTION_SCOPE
         st.session_state.setdefault("calculation_logs", {}).pop(
             "physics", None)
         calc_log = _CalculationLog(
             "learned",
-            f"{model.upper()} aircraft analysis",
+            "Extra Trees aircraft analysis",
             learned_log_slot)
         calc_log.add(
             "AIRCRAFT",
             f"{ac.name}; engines={ac.n_engines}; "
             f"thrust={ac.max_static_thrust_lb:,.0f} lb/engine; "
             f"MTOW={ac.mtow_lb:,.0f} lb")
-        if approach != "Learned ET/RF only":
+        if approach != "Learned ET only":
             _sync_physics_widgets_from_aircraft(
                 ac, _matching_active_preset(ac))
             calc_log.add(
@@ -673,11 +683,11 @@ def page_designer():
                 f"Canonicalize corrected net thrust rows: {power_note}")
             calc_log.add(
                 "MODEL CACHE",
-                f"Resolve `{model}` predictor for datastore {version}; "
-                "fit the merged ANP corpus on cache miss")
-            with st.spinner(f"Fitting `{model}` on the ANP fleet and "
-                            f"predicting…"):
-                predictor = get_predictor(model, version)
+                "Resolve the fixed Extra Trees predictor for the current "
+                "datastore; fit the complete Jet population on cache miss")
+            with st.spinner(
+                    "Fitting Extra Trees on the complete Jet population and predicting…"):
+                predictor = get_predictor(version)
                 calc_log.add(
                     "FEATURES",
                     "Build aircraft descriptors plus log10(power/engine) "
@@ -719,12 +729,15 @@ def page_designer():
             st.session_state["prediction"] = pred
             st.session_state["pred_meta"] = {
                 "model": model, "version": version,
+                "training_scope": training_scope,
+                "model_identity": prediction_model_identity(),
+                "training_metadata": pred.metadata,
                 "aircraft": ac.to_dict(), "name": ac.name}
             st.session_state.pop("crosscheck", None)   # stale on new predict
             st.session_state.pop("physics_result", None)
             calc_log.finish(
                 f"Aircraft analysis prepared with {len(pred.tables)} tables")
-            if approach == "Learned ET/RF only":
+            if approach == "Learned ET only":
                 st.success(
                     "Learned prediction ready. Detailed tables remain "
                     "available under **Prediction results**.")
@@ -744,11 +757,12 @@ def page_designer():
         meta = st.session_state["pred_meta"]
         st.divider()
         st.caption("Current shared-aircraft analysis")
-        m1, m2, m3 = st.columns(3)
+        m1, m2, m3, m4 = st.columns(4)
         m1.metric("Aircraft", meta["name"])
-        m2.metric("Model", meta["model"])
-        m3.metric("Tables", len(st.session_state["prediction"].tables))
-        if approach != "Learned ET/RF only":
+        m2.metric("Model", "Extra Trees")
+        m3.metric("Population", "Complete Jet")
+        m4.metric("Tables", len(st.session_state["prediction"].tables))
+        if approach != "Learned ET only":
             st.divider()
             page_physics(
                 embedded=True,
@@ -757,7 +771,7 @@ def page_designer():
 
 def _render_input_health(version: str):
     """Live realism check of the current form inputs (re-runs every render, so
-    it updates as fields change). Warn-only — it never blocks Predict."""
+    it updates as fields change). Prediction rejects hard-error findings."""
     ac = _aircraft_from_state()
     findings = evaluate_aircraft_inputs(ac, get_input_envelope(version))
     errors = [f for f in findings if f["level"] == "error"]
@@ -790,7 +804,6 @@ def _aircraft_from_state() -> ParametricAircraft:
     s = st.session_state
     return ParametricAircraft(
         name=_sanitize_name(s["f_name"]) or "GENERIC",
-        engine_type=s["f_engine_type"],
         n_engines=int(s["f_n_engines"]),
         max_static_thrust_lb=float(s["f_thrust"]),
         mtow_lb=float(s["f_mtow"]),
@@ -810,6 +823,11 @@ def _aircraft_from_state() -> ParametricAircraft:
 # ===========================================================================
 
 def page_comparison():
+    _methodology_panel(
+        "Compare the Extra Trees output with nearest Jet ANP reference curves.",
+        "Review the matched power/distance evidence and its limits.",
+        "Complete Jet ANP truth and the current prediction metadata; comparisons are output-only and do not refit either route.",
+    )
     pred = _require_prediction()
     if pred is None:
         return
@@ -819,7 +837,6 @@ def page_comparison():
     meta = st.session_state["pred_meta"]
     acd = meta["aircraft"]
     st.header("Comparison — future vs real ANP aircraft")
-
     # ---- controls --------------------------------------------------------
     metrics = sorted({m for (m, _om) in pred.tables})
     c1, c2, c3 = st.columns([1, 1, 1])
@@ -1073,10 +1090,13 @@ def _store_expander(pred, meta):
                      key="store_button"):
             cc = st.session_state.get("crosscheck")
             cc_result = cc["result"] if cc else None
-            ac = ParametricAircraft(**meta["aircraft"])
+            aircraft_payload = dict(meta["aircraft"])
+            aircraft_payload.pop("engine_type", None)
+            ac = ParametricAircraft(**aircraft_payload)
             store = PredictionStore(DB_PATH)
             results = store.add(ac, pred.tables, pred.uncertainty,
-                                model=meta["model"], crosscheck=cc_result)
+                                model=meta["model_identity"],
+                                crosscheck=cc_result)
             for (metric, om), (status, reasons) in sorted(results.items()):
                 note = f" — {'; '.join(reasons)}" if reasons else ""
                 mark = {"ok": "stored", "caution": "stored [CAUTION]",
@@ -1087,13 +1107,23 @@ def _store_expander(pred, meta):
 
 
 def page_results():
+    _methodology_panel(
+        "Inspect predicted Jet NPD tables, QA status, and provenance.",
+        "Select a task and inspect or download the result.",
+        "Extra Trees prediction tables with cross-tree dispersion and independent physics metadata where requested.",
+    )
     pred = _require_prediction()
     if pred is None:
         return
     meta = st.session_state["pred_meta"]
     st.header("Prediction results")
-    st.caption(f"NPD-equivalent tables for **{meta['name']}** "
-               f"(model `{meta['model']}`).")
+    st.caption(
+        f"NPD-equivalent tables for **{meta['name']}** using Extra Trees on "
+        "the complete Jet population.")
+    training_metadata = meta["training_metadata"]
+    st.caption(
+        f"Training support: {len(training_metadata['selected_npd_ids'])} NPD "
+        f"IDs; {training_metadata['support_counts']}.")
 
     combos = sorted(pred.tables)
     metrics = sorted({m for m, _om in combos})
@@ -1207,7 +1237,6 @@ def _apply_physics_preset():
 def _preset_aircraft(preset):
     return ParametricAircraft(
         name=preset.description,
-        engine_type="Jet",
         n_engines=preset.n_engines,
         max_static_thrust_lb=preset.max_thrust_lbf,
         bypass_ratio=preset.bpr,
@@ -1419,6 +1448,11 @@ def _status_frame(statuses):
 
 
 def page_physics(*, embedded=False, compare_learned=True):
+    _methodology_panel(
+        "Run the independent component-physics SEL/LAmax plausibility event.",
+        "Supply the physical event inputs and run the component model.",
+        "PhysicsDesign inputs and frozen calibration artifact; learned features and residuals are never physics inputs.",
+    )
     pred = _require_prediction()
     if pred is None:
         return
@@ -1430,7 +1464,7 @@ def page_physics(*, embedded=False, compare_learned=True):
     st.caption(
         "Run the independent, frozen-calibration component model directly. "
         + (
-            "ET/RF levels are shown only as an output comparison; they are "
+            "ET levels are shown only as an output comparison; they are "
             "never inputs to the physics calculation. "
             if compare_learned else
             "No learned-model overlay is displayed in physics-only mode. ")
@@ -1463,7 +1497,7 @@ def page_physics(*, embedded=False, compare_learned=True):
     if preset:
         st.success(
             f"Physics aircraft matches the shared **{preset.label}** "
-            "definition used by ET/RF.")
+            "definition used by ET.")
 
     default_bpr = float(ac.bypass_ratio or 6.0)
     default_area = float(ac.wing_area_m2 or ac.mtow_lb * KG_PER_LB / 600.0)
@@ -1705,7 +1739,7 @@ def page_physics(*, embedded=False, compare_learned=True):
                 f"span={design.span_m:.1f} m, engines={design.n_engines}")
             calc_log.add(
                 "CALIBRATION",
-                "Resolve frozen A320-211 jet/fan/airframe source anchors")
+                "Load frozen A320-270N jet/fan/airframe source anchors")
             calc_log.add(
                 "SOURCES",
                 "Evaluate mixed jet, fan, optional core and six airframe "
@@ -1719,8 +1753,7 @@ def page_physics(*, embedded=False, compare_learned=True):
                         "SYNC",
                         "Recalculate learned tables for the selected physics "
                         "aircraft before comparison")
-                    working_pred = get_predictor(
-                        meta["model"], meta["version"]).predict(ac)
+                    working_pred = get_predictor(meta["version"]).predict(ac)
                 diagnostics = working_pred.physics_diagnostics(
                     design, thrust_lbf, op_mode, distance_ft)
                 calc_log.add(
@@ -1752,7 +1785,7 @@ def page_physics(*, embedded=False, compare_learned=True):
                 if compare_learned:
                     calc_log.add(
                         "COMPARE",
-                        "Interpolate ET/RF at identical thrust and distance "
+                        "Interpolate ET at identical thrust and distance "
                         "coordinates; learned values never enter physics")
         except (RuntimeError, ValueError, FloatingPointError) as exc:
             calc_log.fail(str(exc))
@@ -1923,6 +1956,11 @@ def page_physics(*, embedded=False, compare_learned=True):
 # ===========================================================================
 
 def page_operations():
+    _methodology_panel(
+        "Propagate a Jet NPD table through a screening operation profile.",
+        "Choose the operation settings and inspect the observer-level result.",
+        "Extra Trees NPD output plus the selected procedural profile; this is a screening calculation.",
+    )
     pred = _require_prediction()
     if pred is None:
         return
@@ -1937,7 +1975,7 @@ def page_operations():
     st.header("Operations — departure synthesis")
     st.caption("Borrows a real donor aircraft's departure procedure and "
                "rescales its thrust deck for the predicted aircraft "
-               "(SAE-AIR-1845-style synthesis, mirroring `pnmf_cli.py demo`).")
+               "(SAE-AIR-1845-style synthesis using a real donor procedure).")
 
     usable = set(db.dep_steps["ACFT_ID"].unique())
     match = db.nearest_aircraft(acd["mtow_lb"], engine_type=acd["engine_type"],
@@ -2065,6 +2103,11 @@ def page_fleet():
     db = get_db(version)
     pt = get_param_table(version)
     st.header("Fleet explorer / validation")
+    _methodology_panel(
+        "Browse the Jet-only truth population and read-only validation artifacts.",
+        "Filter the Jet fleet or inspect a metric/mode curve.",
+        "Jet-only SQLite truth tables, source provenance, and ignored validation artifacts.",
+    )
 
     s = db.summary()
     m1, m2, m3 = st.columns(3)
@@ -2080,9 +2123,7 @@ def page_fleet():
     mtow_col = "Max Gross Takeoff Weight (lb)"
     c1, c2, c3 = st.columns([1, 2, 1])
     with c1:
-        etypes = st.multiselect("Engine type",
-                                sorted(a["Engine Type"].dropna().unique()),
-                                key="fleet_etype")
+        st.caption("Engine type: Jet (fixed runtime population)")
     with c2:
         mtow_range = st.slider("MTOW [lb]", 1.0e3, 1.5e6,
                                (1.0e3, 1.5e6), key="fleet_mtow")
@@ -2090,8 +2131,6 @@ def page_fleet():
         name_filter = st.text_input("Name contains", key="fleet_name")
 
     filt = a.copy()
-    if etypes:
-        filt = filt[filt["Engine Type"].isin(etypes)]
     filt = filt[(filt[mtow_col] >= mtow_range[0]) &
                (filt[mtow_col] <= mtow_range[1])]
     if name_filter:
@@ -2142,66 +2181,47 @@ def page_fleet():
         plt.close(fig)
 
     st.divider()
-    st.subheader("Model ranking")
-    st.caption("Which prediction model to trust, ranked by **average rank** "
-               "across the leave-one-aircraft-out bake-off's metric:op combos "
-               "(Friedman / Nemenyi mean-rank method, Demšar 2006 — the "
-               "standard way to compare several predictors over several "
-               "tasks). Lower average rank is better; ranking within each "
-               "combo first makes it scale-free, so an easy high-dB combo "
-               "can't dominate.")
-    ranked = (load_model_ranking(os.path.getmtime(_COMPARE_CSV))
-              if os.path.exists(_COMPARE_CSV) else None)
-    if ranked is None:
-        st.info("Run `.\\pnmf.ps1 compare` to generate "
-                "`outputs/algorithm_comparison.csv`, then the ranking appears "
-                "here.")
+    st.subheader("Read-only Jet validation evidence")
+    st.caption(
+        "Extra Trees is the fixed production learner. Random Forest is shown "
+        "only as the identical-fold validation challenger; this page cannot "
+        "select a learner or training population.")
+    validation_dir = os.path.join("outputs", "jet_model_validation", "current")
+    manifest_path = os.path.join(validation_dir, "run_manifest.json")
+    if os.path.exists(manifest_path):
+        evidence = load_output_json(
+            manifest_path, os.path.getmtime(manifest_path))
+        comparison = evidence["model_comparison"]
+        v1, v2, v3 = st.columns(3)
+        v1.metric("Extra Trees RMSE", f"{comparison['et_overall_rmse']:.3f} dB")
+        v2.metric("Random Forest RMSE", f"{comparison['rf_overall_rmse']:.3f} dB")
+        ci_low, ci_high = comparison["et_minus_rf_bootstrap_ci"]
+        v3.metric("ET−RF 95% interval", f"[{ci_low:.3f}, {ci_high:.3f}] dB")
+        feature_passed = any(
+            item["passed"] for item in evidence["feature_selection"]["evaluations"])
+        st.caption(
+            "Feature gate: "
+            + ("a candidate passed." if feature_passed
+               else "no alternative passed; the compact nine-feature schema remains fixed."))
+        rows = []
+        for task, et_rmse in comparison["et_task_rmse"].items():
+            rf_rmse = comparison["rf_task_rmse"][task]
+            rows.append({
+                "Task": task,
+                "Extra Trees RMSE [dB]": round(et_rmse, 3),
+                "Random Forest RMSE [dB]": round(rf_rmse, 3),
+                "Winner": "Extra Trees" if et_rmse < rf_rmse else "Random Forest",
+            })
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+        st.caption(
+            "Detailed splits, slices, bootstrap samples, hashes, and gate records "
+            "remain available in the machine validation artifacts.")
     else:
-        ranking_df, info = ranked
-        (st.success if info["significant"] else st.info)(info["note"])
-        medals = {0: "🥇", 1: "🥈", 2: "🥉"}
-        show = ranking_df.copy()
-        show.insert(0, "", [medals.get(i, f"{i + 1}")
-                            for i in range(len(show))])
-        show = show.rename(columns={
-            "model": "model", "avg_rank": "avg rank", "wins": "combos won",
-            "mean_score": "mean med-RMSE [dB]", "best_combo": "best on",
-            "worst_combo": "worst on"})
-        st.dataframe(show, width="stretch", hide_index=True)
-        if info["dropped"]:
-            st.caption("Not ranked because a validation combo is missing: "
-                       f"{', '.join(info['dropped'])}.")
-
-        fig, ax = plt.subplots(figsize=(7.2, 0.45 * len(ranking_df) + 1.0))
-        ypos = np.arange(len(ranking_df))[::-1]
-        bar_colors = [FUTURE_COLOR if m == info["recommended"] else "#94a3b8"
-                      for m in ranking_df["model"]]
-        ax.barh(ypos, ranking_df["avg_rank"], color=bar_colors)
-        for y, (_i, r) in zip(ypos, ranking_df.iterrows()):
-            ax.text(r["avg_rank"], y, f" {r['avg_rank']:.2f}", va="center",
-                    ha="left", fontsize=8)
-        ax.set_yticks(ypos)
-        ax.set_yticklabels(ranking_df["model"], fontsize=9)
-        ax.set_xlabel("average rank across combos (lower = better)")
-        ax.set_title("Model ranking (recommended highlighted)", fontsize=10)
-        ax.grid(True, axis="x", alpha=0.25)
-        fig.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
-
-    st.divider()
-    st.subheader("Validation artifacts")
-    for path, label in [("outputs/validation_summary.csv",
-                         "LOO validation summary"),
-                        ("outputs/algorithm_comparison.csv",
-                         "Algorithm bake-off")]:
-        if os.path.exists(path):
-            st.caption(label)
-            st.dataframe(load_output_csv(path, os.path.getmtime(path)),
-                        width="stretch", hide_index=True)
-        else:
-            cmd = "validate" if "validation" in path else "compare"
-            st.info(f"{label}: run `.\\pnmf.ps1 {cmd}` to generate `{path}`.")
+        st.info("Run `.\\pnmf.ps1 validate-jet-model` to generate validation evidence.")
+    report_path = os.path.join("..", "..", "docs", "JET_MODEL_METHODOLOGY_AND_VALIDATION_REPORT.md")
+    if os.path.exists(report_path):
+        st.caption("Active methodology report")
+        st.markdown("[Open Jet methodology and validation report](../../docs/JET_MODEL_METHODOLOGY_AND_VALIDATION_REPORT.md)")
 
     st.subheader("Figure gallery")
     fig_names = ["gap_rmse_by_combo.png", "gap_per_aircraft_rmse.png",
@@ -2216,8 +2236,8 @@ def page_fleet():
                 st.image(path, caption=fname, width="stretch")
             shown += 1
     if shown == 0:
-        st.info("No figures found in `outputs/` yet — run "
-                "`.\\pnmf.ps1 validate` / `compare` / `physics` / `demo`.")
+        st.info("No figures found in `outputs/` yet. Run `.\\pnmf.ps1 physics` "
+                "or inspect the learned-model validation evidence above.")
 
 
 PAGES = {
@@ -2243,7 +2263,8 @@ def _sidebar_units():
 
 def _sidebar_status(version: str):
     st.subheader("Status")
-    st.write(f"**Model:** `{st.session_state.get('f_model', DEFAULT_MODEL)}`")
+    st.write("**Model:** Extra Trees production")
+    st.write("**Training population:** Jet-only / 94 curves / 93 groups")
     st.write("**Prediction loaded:** "
              f"{'yes' if 'prediction' in st.session_state else 'no'}")
     try:
@@ -2252,7 +2273,7 @@ def _sidebar_status(version: str):
                  f"**NPD sets:** {s['n_npd_sets']}")
     except Exception as e:                        # pragma: no cover
         st.write(f"db unavailable: {e}")
-    st.caption(f"data version: `{version}`")
+    st.caption(f"Data rebuilt: `{version}`")
 
 
 def _sidebar_how_to_use():

@@ -15,18 +15,16 @@ from pnmf.models import SUPPORTED_LEARNERS
 
 def test_combined_corpus_and_manifest():
     db = ANPDatabase()
-    assert (len(db.aircraft), db.aircraft["ACFT_ID"].nunique()) == (166, 165)
-    assert (db.npd["NPD_ID"].nunique(), len(db.npd)) == (122, 3196)
+    assert (len(db.aircraft), db.aircraft["ACFT_ID"].nunique()) == (136, 135)
+    assert (db.npd["NPD_ID"].nunique(), len(db.npd)) == (94, 2664)
     assert db.npd["source_dataset"].value_counts().to_dict() == {
-        "legacy_v2.3": 2776,
+        "legacy_v2.3": 2244,
         "supplement_v6.3": 420,
     }
     manifest = db.dataset_manifest()
-    assert set(manifest["source_dataset"]) == {
+    assert set(manifest["source_dataset"].dropna()) == {
         "legacy_v2.3", "supplement_v6.3"}
-    assert set(db.aircraft.loc[
-        db.aircraft["ACFT_ID"] == "7773ER", "NPD_ID"]) == {
-        "GE9015", "7773ER"}
+    assert db.aircraft["Engine Type"].eq("Jet").all()
 
 
 def test_v63_required_missing_table_fails_loudly(tmp_path):
@@ -40,9 +38,19 @@ def test_v63_required_missing_table_fails_loudly(tmp_path):
 
 def test_training_matrix_contains_v63_samples():
     db = ANPDatabase()
-    model = SurrogateNPDModel("et").fit(db, "SEL", "D")
+    model = SurrogateNPDModel().fit(db, "SEL", "D")
     assert model.training_provenance[("SEL", "D")] == {
-        "legacy_v2.3": 398,
+        "legacy_v2.3": 327,
+        "supplement_v6.3": 59,
+    }
+
+
+def test_default_training_scope_is_complete_jet_population():
+    db = ANPDatabase()
+    model = SurrogateNPDModel().fit(db, "SEL", "D")
+    assert model.training_scope == "jet_merged"
+    assert model.training_provenance[("SEL", "D")] == {
+        "legacy_v2.3": 327,
         "supplement_v6.3": 59,
     }
 
@@ -50,12 +58,10 @@ def test_training_matrix_contains_v63_samples():
 def test_supported_learned_model_surface():
     assert DEFAULT_MODEL == "et"
     assert SUPPORTED_LEARNERS == ("et", "rf")
-    for learner in SUPPORTED_LEARNERS:
-        SurrogateNPDModel(learner)
-        NoisePredictor(model=learner, metrics=())
-    with pytest.raises(ValueError, match="unsupported learned model"):
-        SurrogateNPDModel("gbr")
-    with pytest.raises(ValueError, match="unknown model"):
+    SurrogateNPDModel()
+    with pytest.raises(TypeError):
+        SurrogateNPDModel("rf")
+    with pytest.raises(TypeError):
         NoisePredictor(model="unsupported", metrics=())
 
 
@@ -65,4 +71,4 @@ def test_cli_is_caller_cwd_independent(tmp_path):
          str(PROJECT_ROOT / "pnmf_cli.py"), "manifest"],
         cwd=tmp_path, capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
-    assert "'n_npd_sets': 122" in result.stdout
+    assert "'n_npd_sets': 94" in result.stdout

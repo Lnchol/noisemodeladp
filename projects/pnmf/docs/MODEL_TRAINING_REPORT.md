@@ -1,8 +1,8 @@
 # PNMF Model Training and Validation Report
 
-> Generated 2026-07-24T10:42:09.728690+00:00 by `pnmf_cli.py validate-model`.
-> This is the current learned-model evidence report. Superseded pre-v6.3
-> reports have been removed from the live documentation set.
+> Historical mixed-engine evidence. The canonical active artifact is [Jet Model Methodology and Validation](../../docs/JET_MODEL_METHODOLOGY_AND_VALIDATION_REPORT.md); this file is retained for audit traceability and is not a production-selection authority.
+
+> Generated 2026-08-26T09:05:32.447459+00:00 by `pnmf_cli.py validate-model`. This is the current learned-model evidence report; `FINAL_REPORT.md` is historical.
 
 ## Scope and conclusion
 

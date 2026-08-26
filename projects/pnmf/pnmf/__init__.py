@@ -13,7 +13,7 @@ Public API
 ANPDatabase        : loader/joiner for the EASA ANP CSV database
 ParametricAircraft : the parametric aircraft definition (the framework input)
 NPDTable           : an NPD curve set with Doc 29 interpolation (the output)
-SurrogateNPDModel  : data-driven metamodel trained on the ANP population
+SurrogateNPDModel  : Jet Extra Trees metamodel trained on the ANP population
 PhysicsNPDModel    : independent component-source physics workflow
 OperationalProfile : approach/departure procedure -> flight segments
 """
@@ -21,6 +21,12 @@ from .anp import ANPDatabase
 from .core import ParametricAircraft
 from .core import NPDTable, STANDARD_DISTANCES_FT
 from .models import SurrogateNPDModel
+from .physics_calibration import (
+    DEFAULT_ARTIFACT_PATH,
+    build_calibration_artifact,
+    load_calibrated_model,
+    load_calibration_artifact,
+)
 from .operations import OperationalProfile
 from .operations import DepartureSynthesizer
 from .physics import (
@@ -41,6 +47,10 @@ __all__ = [
     "NPDTable",
     "STANDARD_DISTANCES_FT",
     "SurrogateNPDModel",
+    "DEFAULT_ARTIFACT_PATH",
+    "build_calibration_artifact",
+    "load_calibrated_model",
+    "load_calibration_artifact",
     "OperationalProfile",
     "DepartureSynthesizer",
     "PhysicsNPDModel",

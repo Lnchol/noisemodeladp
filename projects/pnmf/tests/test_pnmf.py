@@ -27,16 +27,15 @@ def _levels(findings):
     return [f["level"] for f in findings]
 
 
-def test_input_envelope_has_all_engine_types(envelope):
-    for et in ("Jet", "Turboprop", "Piston"):
-        e = envelope["per_type"][et]
-        assert e["thr"] is not None and e["mtow"] is not None
-        assert e["n_samples"] > 0
+def test_input_envelope_is_jet_only(envelope):
+    assert set(envelope["per_type"]) == {"Jet"}
+    e = envelope["per_type"]["Jet"]
+    assert e["thr"] is not None and e["mtow"] is not None
+    assert e["n_samples"] > 0
 
 
 def test_realistic_jet_is_clean(envelope):
-    ac = ParametricAircraft(engine_type="Jet", n_engines=2,
-                            max_static_thrust_lb=27000, mtow_lb=155000,
+    ac = ParametricAircraft(n_engines=2, max_static_thrust_lb=27000, mtow_lb=155000,
                             mlw_lb=137000)
     assert evaluate_aircraft_inputs(ac, envelope) == []
 
@@ -50,17 +49,17 @@ def test_preset_has_warnings_but_no_errors(envelope):
 
 
 def test_absurd_inputs_raise_errors(envelope):
-    piston = ParametricAircraft(engine_type="Piston", n_engines=2,
-                                max_static_thrust_lb=100000, mtow_lb=100000,
+    high_tw = ParametricAircraft(n_engines=2, max_static_thrust_lb=100000,
+                                 mtow_lb=100000,
                                 mlw_lb=95000)
-    assert "error" in _levels(evaluate_aircraft_inputs(piston, envelope))
+    assert "error" in _levels(evaluate_aircraft_inputs(high_tw, envelope))
 
-    hi_tw = ParametricAircraft(engine_type="Jet", n_engines=4,
+    hi_tw = ParametricAircraft(n_engines=4,
                                max_static_thrust_lb=120000, mtow_lb=100000,
                                mlw_lb=90000)
     assert "error" in _levels(evaluate_aircraft_inputs(hi_tw, envelope))
 
-    heavy_mlw = ParametricAircraft(engine_type="Jet", n_engines=2,
+    heavy_mlw = ParametricAircraft(n_engines=2,
                                    max_static_thrust_lb=27000, mtow_lb=100000,
                                    mlw_lb=300000)
     assert "error" in _levels(evaluate_aircraft_inputs(heavy_mlw, envelope))
@@ -122,10 +121,10 @@ def test_enforce_distance_monotone():
 # ---------------- database integrity ----------------------------------------
 def test_db_load_and_hygiene(db):
     s = db.summary()
-    assert s["n_aircraft"] == 166 and s["n_npd_sets"] == 122
-    assert s["n_npd_rows"] == 3196
+    assert s["n_aircraft"] == 136 and s["n_npd_sets"] == 94
+    assert s["n_npd_rows"] == 2664
     assert s["npd_rows_by_source"] == {
-        "legacy_v2.3": 2776, "supplement_v6.3": 420}
+        "legacy_v2.3": 2244, "supplement_v6.3": 420}
     # whitespace stripped everywhere (fault: 'T_05  ' style cells)
     assert not db.dep_steps['Flap_ID'].str.endswith(' ').any()
     assert not db.aero['Flap_ID'].str.endswith(' ').any()
@@ -138,7 +137,7 @@ def test_db_load_and_hygiene(db):
 
 # ---------------- supported learned surrogate --------------------------------
 def test_surrogate_predicts_physical_table(db):
-    m = SurrogateNPDModel("rf").fit(db, "SEL", "D")
+    m = SurrogateNPDModel().fit(db, "SEL", "D")
     ac = ParametricAircraft(name="T", max_static_thrust_lb=25000,
                             mtow_lb=160000, mlw_lb=140000)
     tbl, std = m.predict_table(ac, "SEL", "D", [12000, 20000], return_std=True)

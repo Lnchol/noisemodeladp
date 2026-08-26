@@ -1223,8 +1223,39 @@ class PhysicsNPDModel:
                 L[i, j] = lamax if metric == 'LAmax' else sel
         return NPDTable(P, L, metric, op_mode, npd_id=design.name)
 
+    def calibration_parameters(self) -> dict[str, float]:
+        return {
+            "C_jet": float(self.jet.c),
+            "C_fan": float(self.fan.c),
+            "C_wingflap": float(self.airframe.cw),
+            "C_gear": float(self.airframe.cg),
+            "spectral_scale": float(self.jet.f_scale),
+        }
+
+    def apply_calibration(self, parameters: Mapping[str, float]):
+        required = ("C_jet", "C_fan", "C_wingflap", "C_gear",
+                    "spectral_scale")
+        missing = [key for key in required if key not in parameters]
+        if missing:
+            raise ValueError(
+                "physics calibration is missing parameters: "
+                + ", ".join(missing))
+        values = {key: float(parameters[key]) for key in required}
+        if not all(np.isfinite(value) for value in values.values()):
+            raise ValueError("physics calibration parameters must be finite")
+        if values["spectral_scale"] <= 0:
+            raise ValueError("physics spectral_scale must be positive")
+        self.jet.c = values["C_jet"]
+        self.fan.c = values["C_fan"]
+        self.airframe.cw = values["C_wingflap"]
+        self.airframe.cg = values["C_gear"]
+        self.jet.f_scale = values["spectral_scale"]
+        self.fan.f_scale = values["spectral_scale"]
+        self.airframe.f_scale = values["spectral_scale"]
+        return self
+
     # ---- one-shot calibration against ANP truth --------------------------
-    def calibrate(self, db, acft_id, bpr, verbose=True):
+    def calibrate(self, db, acft_id, bpr, verbose=True, optimizer_config=None):
         """Fit (C_jet, C_fan, C_wingflap, C_gear) to one reference aircraft's
         ANP SEL + LAmax curves (both op modes), then freeze them."""
         row = db.aircraft[db.aircraft['ACFT_ID'] == acft_id].iloc[0]
@@ -1255,6 +1286,16 @@ class PhysicsNPDModel:
                 res.append((pred - truth).ravel())
             return np.concatenate(res)
 
+        config = dict(optimizer_config or {})
+        spectral_grid = tuple(config.get(
+            "spectral_grid", (0.0, 0.7, 1.3, 2.0, 2.6)))
+        stage1_max_nfev = int(config.get("stage1_max_nfev", 40))
+        joint_max_nfev = int(config.get("joint_max_nfev", 60))
+        stage1_diff_step = float(config.get("stage1_diff_step", 1.0))
+        joint_diff_step = float(config.get("joint_diff_step", 0.3))
+        stage1_xtol = float(config.get("stage1_xtol", 1e-2))
+        joint_xtol = float(config.get("joint_xtol", 1e-3))
+
         # Stage 1: coarse grid on the spectral placement (the one strongly
         # non-convex parameter), fitting the four level constants at each
         # node. Starting levels are physically scaled so every component is
@@ -1264,10 +1305,11 @@ class PhysicsNPDModel:
         hi = np.array([180.0, 100.0, 145.0, 135.0])
         x_lvl0 = np.array([140.0, 60.0, 105.0, 95.0])
         best = None
-        for lf in (0.0, 0.7, 1.3, 2.0, 2.6):              # f_scale x1..x6
+        for lf in spectral_grid:
             sol = least_squares(lambda c: residual(np.r_[c, lf]),
                                 x_lvl0, bounds=(lo, hi),
-                                diff_step=1.0, xtol=1e-2, max_nfev=40)
+                                diff_step=stage1_diff_step, xtol=stage1_xtol,
+                                max_nfev=stage1_max_nfev)
             cost = float(np.sqrt(np.mean(sol.fun ** 2)))
             if best is None or cost < best[0]:
                 best = (cost, np.r_[sol.x, lf])
@@ -1275,7 +1317,8 @@ class PhysicsNPDModel:
         assert best is not None  # the grid loop always evaluates >= 1 node
         sol = least_squares(residual, best[1],
                             bounds=(np.r_[lo, 0.0], np.r_[hi, 3.0]),
-                            diff_step=0.3, xtol=1e-3, max_nfev=60)
+                            diff_step=joint_diff_step, xtol=joint_xtol,
+                            max_nfev=joint_max_nfev)
         set_params(sol.x)
         rmse = float(np.sqrt(np.mean(sol.fun ** 2)))
         if verbose:

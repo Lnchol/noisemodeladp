@@ -27,9 +27,9 @@ from .anp import ANPDatabase, DIST_COLS, PROJECT_ROOT
 from .core import ParametricAircraft, STANDARD_DISTANCES_FT
 from .models import (
     SUPPORTED_LEARNERS,
-    SurrogateNPDModel,
     enforce_distance_monotone,
     power_features,
+    validation_regressor,
 )
 
 COMBOS = tuple(
@@ -78,9 +78,7 @@ def exact_model_params(seed: int) -> dict[str, dict]:
     """Return every effective sklearn constructor parameter for this run."""
     result: dict[str, dict] = {}
     for learner in SUPPORTED_LEARNERS:
-        regressor = SurrogateNPDModel(
-            learner=learner, random_state=seed
-        )._new_regressor()
+        regressor = validation_regressor(learner, seed)
         result[learner] = {
             "class": (
                 f"{regressor.__class__.__module__}."
@@ -339,8 +337,7 @@ def _fit_predict(
 ) -> tuple[np.ndarray, float]:
     if learner not in SUPPORTED_LEARNERS:
         raise ValueError(f"unsupported learner {learner!r}")
-    model = SurrogateNPDModel(learner=learner, random_state=seed)
-    regressor = model._new_regressor()
+    regressor = validation_regressor(learner, seed)
     start = time.perf_counter()
     regressor.fit(
         train.loc[:, FEATURES].to_numpy(dtype=float),

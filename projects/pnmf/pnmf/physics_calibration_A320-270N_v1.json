@@ -1,0 +1,45 @@
+{
+  "anchor": {
+    "aircraft_id": "A320-270N",
+    "npd_id": "A320-270N",
+    "preset_id": "A320-270N"
+  },
+  "code_revision": "595a25979ed3104ff17f698fbd73488addf6cd8b",
+  "generated_utc": "2026-08-13T15:11:01.499369+00:00",
+  "generation_command": "pnmf_cli.py build-physics-calibration",
+  "metrics": {
+    "bias_db": 0.43307113748049075,
+    "cell_count": 180,
+    "mae_db": 5.331843083618328,
+    "p90_absolute_error_db": 9.81459758650362,
+    "rmse_db": 6.200664698300623
+  },
+  "optimizer": {
+    "joint_diff_step": 0.3,
+    "joint_max_nfev": 2,
+    "joint_xtol": 0.001,
+    "spectral_grid": [
+      0.0,
+      1.3,
+      2.6
+    ],
+    "stage1_diff_step": 1.0,
+    "stage1_max_nfev": 2,
+    "stage1_xtol": 0.01
+  },
+  "parameters": {
+    "C_fan": 84.95906350861965,
+    "C_gear": 121.43070089659801,
+    "C_jet": 144.6292049282891,
+    "C_wingflap": 131.2386825917511,
+    "spectral_scale": 6.319070298520021
+  },
+  "registry_version": "easa-verified-14-family-v1",
+  "schema_version": "pnmf.physics-calibration/v1",
+  "source_hashes": {
+    "v63_aircraft": "ea730a0d2940537ab0ea5e817dfbc80037b299fe763e20d8200af391baee81b8",
+    "v63_npd": "77984a355fce073fd98fbd7bd52a36332e7a9a10d504adee1353b41780b4d4b2",
+    "verified_workbook": "26221b57fb56fdd90aad6798d8c0d6d12f309660f9445ef60d1c1d7cb3977adf"
+  },
+  "validation_scope": "A320-270N in-sample SEL/LAmax A/D"
+}
