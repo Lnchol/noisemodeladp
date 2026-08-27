@@ -182,11 +182,15 @@ class ANPDatabase:
     # ---- parametric descriptor per NPD_ID -------------------------------
     def param_table(self) -> pd.DataFrame:
         """One parametric descriptor row per NPD_ID (the model's X features)."""
+        cached = getattr(self, "_cached_param_table", None)
+        if cached is not None:
+            return cached
         a = self.aircraft.dropna(subset=['NPD_ID']).copy()
         # if several aircraft share an NPD_ID, keep the heaviest (representative)
         a = (a.sort_values('Max Gross Takeoff Weight (lb)', ascending=False)
                .drop_duplicates('NPD_ID', keep='first')
                .set_index('NPD_ID'))
+        self._cached_param_table = a
         return a
 
     def curve(self, npd_id: str, metric: str, op_mode: str) -> pd.DataFrame:
@@ -274,12 +278,12 @@ class ANPDatabase:
                                      n=max(4 * n, 12))
         params = self.param_table()
         out, seen = [], set()
-        for _, row in cand.iterrows():
-            npd_id = row['NPD_ID']
+        for row in cand[['ACFT_ID', 'NPD_ID']].itertuples(index=False):
+            npd_id = row.NPD_ID
             if pd.isna(npd_id) or npd_id not in params.index or npd_id in seen:
                 continue
             seen.add(npd_id)
-            out.append((str(row['ACFT_ID']), str(npd_id)))
+            out.append((str(row.ACFT_ID), str(npd_id)))
             if len(out) >= n:
                 break
         return out

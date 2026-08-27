@@ -128,10 +128,10 @@ class SurrogateNPDModel:
                 curve["Power Setting"].to_numpy(dtype=float),
                 descriptor["Power Parameter"],
             )
-            for index, row in curve.reset_index(drop=True).iterrows():
-                features.append(matrix[index].tolist())
-                truth.append(row[DIST_COLS].to_numpy(dtype=float).tolist())
-                groups.append(npd_id)
+            curve_truth = curve[DIST_COLS].to_numpy(dtype=float)
+            features.extend(matrix)
+            truth.extend(curve_truth)
+            groups.extend([npd_id] * len(curve_truth))
         return (
             np.asarray(features, dtype=float),
             np.asarray(truth, dtype=float),

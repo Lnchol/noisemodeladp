@@ -41,22 +41,14 @@ def cmd_datastore():
     Reads the raw v2.3 semicolon CSVs and v6.3 comma CSVs under 03_data,
     merges them with source provenance, and writes canonical truth tables.
     """
-    import sys
+    from pnmf.anp import ANPDatabase, build_datastore
 
-    from pnmf.anp import ANPDatabase
-    from pnmf.anp import build_datastore
-
-
-    def main(root="."):
-        db_path = build_datastore(root)
-        print(f"built {db_path}")
-        db = ANPDatabase(db_path)
-        print(db.dataset_manifest().to_string(index=False))
-        print("combined summary:", db.summary())
-
-
-    if True:
-        main(sys.argv[1] if len(sys.argv) > 1 else ".")
+    root = sys.argv[1] if len(sys.argv) > 1 else "."
+    db_path = build_datastore(root)
+    print(f"built {db_path}")
+    db = ANPDatabase(db_path)
+    print(db.dataset_manifest().to_string(index=False))
+    print("combined summary:", db.summary())
 
 
 def cmd_manifest():

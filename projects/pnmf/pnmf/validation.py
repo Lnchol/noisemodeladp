@@ -178,46 +178,41 @@ def build_samples(db: ANPDatabase) -> pd.DataFrame:
             group_id = npd_to_group[npd_id]
             acft_ids = direct_acft.get(npd_id, ())
             all_group_acft = group_acft[group_id]
-            for power_index, curve_row in curve.iterrows():
-                source_dataset = str(curve_row["source_dataset"])
+            curve_powers = curve["Power Setting"].to_numpy(dtype=float)
+            source_datasets = curve["source_dataset"].astype(str).to_numpy()
+            source_files = curve["source_file"].astype(str).to_numpy()
+            truth_mat = curve[DIST_COLS].to_numpy(dtype=float)
+            rep_acft_id = str(descriptor.get("ACFT_ID", ""))
+            desc_src = str(descriptor.get("source_dataset", ""))
+            p_param = str(descriptor["Power Parameter"])
+            acft_ids_str = "|".join(acft_ids)
+            all_group_str = "|".join(all_group_acft)
+            feat_dict = {name: float(feature_vector[name]) for name in ParametricAircraft.feature_names()}
+
+            for power_index in range(len(curve)):
+                src_ds = source_datasets[power_index]
                 sample = {
-                    "sample_id": (
-                        f"{metric}:{mode}:{npd_id}:{source_dataset}:"
-                        f"{power_index}"
-                    ),
+                    "sample_id": f"{metric}:{mode}:{npd_id}:{src_ds}:{power_index}",
                     "metric": metric,
                     "op_mode": mode,
                     "npd_id": npd_id,
                     "aircraft_group_id": group_id,
-                    "acft_ids": "|".join(acft_ids),
-                    "aircraft_group_acft_ids": "|".join(all_group_acft),
-                    "representative_acft_id": str(
-                        descriptor.get("ACFT_ID", "")
-                    ),
-                    "source_dataset": source_dataset,
-                    "source_file": str(curve_row["source_file"]),
-                    "descriptor_source_dataset": str(
-                        descriptor.get("source_dataset", "")
-                    ),
+                    "acft_ids": acft_ids_str,
+                    "aircraft_group_acft_ids": all_group_str,
+                    "representative_acft_id": rep_acft_id,
+                    "source_dataset": src_ds,
+                    "source_file": source_files[power_index],
+                    "descriptor_source_dataset": desc_src,
                     "engine_type": aircraft.engine_type,
                     "engine_count": int(aircraft.n_engines),
-                    "power_parameter": str(descriptor["Power Parameter"]),
-                    "power_setting": float(curve_row["Power Setting"]),
+                    "power_parameter": p_param,
+                    "power_setting": float(curve_powers[power_index]),
+                    **feat_dict,
+                    "log_power_lb": float(log_power[power_index]),
+                    "throttle": float(throttle[power_index]),
                 }
-                sample.update(
-                    {name: float(feature_vector[name])
-                     for name in ParametricAircraft.feature_names()}
-                )
-                sample["log_power_lb"] = float(log_power[power_index])
-                sample["throttle"] = float(throttle[power_index])
-                sample.update(
-                    {
-                        truth_column: float(curve_row[distance_column])
-                        for truth_column, distance_column in zip(
-                            TRUTH_COLUMNS, DIST_COLS
-                        )
-                    }
-                )
+                for t_idx, t_col in enumerate(TRUTH_COLUMNS):
+                    sample[t_col] = float(truth_mat[power_index, t_idx])
                 rows.append(sample)
     samples = pd.DataFrame(rows)
     return samples.sort_values(

@@ -280,7 +280,6 @@ mode (Approach / Departure). This class stores that grid and implements the
 Doc 29 lookup rule: linear interpolation/extrapolation on power (thrust),
 logarithmic interpolation on distance.
 """
-import numpy as np
 
 STANDARD_DISTANCES_FT = np.array(
     [200, 400, 630, 1000, 2000, 4000, 6300, 10000, 16000, 25000], dtype=float)
@@ -309,14 +308,24 @@ class NPDTable:
         """Interpolated level: linear on power, log on distance (Doc 29)."""
         power = float(power)
         ld = np.log10(float(distance_ft))
-        # interpolate each power row in log-distance, then interpolate on power
-        row_levels = np.array([np.interp(ld, self.logd, self.L[i],
-                                         left=self._extrap_low(self.L[i], ld),
-                                         right=self._extrap_high(self.L[i], ld))
-                               for i in range(len(self.P))])
         if len(self.P) == 1:
-            return float(row_levels[0])
-        # linear in power, with linear extrapolation outside the tabulated range
+            row = self.L[0]
+            if ld < self.logd[0]:
+                return float(self._extrap_low(row, ld))
+            if ld > self.logd[-1]:
+                return float(self._extrap_high(row, ld))
+            return float(np.interp(ld, self.logd, row))
+
+        row_levels = np.empty(len(self.P), dtype=float)
+        for i in range(len(self.P)):
+            row = self.L[i]
+            if ld < self.logd[0]:
+                row_levels[i] = self._extrap_low(row, ld)
+            elif ld > self.logd[-1]:
+                row_levels[i] = self._extrap_high(row, ld)
+            else:
+                row_levels[i] = np.interp(ld, self.logd, row)
+
         return float(_interp_extrap(power, self.P, row_levels))
 
     def _extrap_low(self, lvec, ld):

@@ -22,7 +22,18 @@ matplotlib.use("Agg")            # headless backend before any pyplot import
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import streamlit as st
+
+try:
+    import streamlit as st 
+except ImportError as err:
+    raise SystemExit(
+        "Streamlit is required to launch the PNMF UI.\n"
+        "Please run using the project PowerShell entrypoint:\n"
+        "  .\\projects\\pnmf\\pnmf.ps1 ui\n"
+        "or select the project virtualenv at:\n"
+        "  projects/pnmf/.venv/Scripts/python.exe"
+    ) from err
+
 
 from pnmf.api import (
     NoisePredictor,

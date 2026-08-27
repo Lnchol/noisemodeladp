@@ -257,7 +257,7 @@ class DepartureSynthesizer:
         x = h = 0.0
         v = 0.0       # current CAS [kt]
 
-        for _, s in steps.iterrows():
+        for s in steps.to_dict('records'):
             stype = str(s['Step Type'])
             rating = str(s['Thrust Rating'])
             coeffs = self._thrust_coeffs(acft_id, rating)

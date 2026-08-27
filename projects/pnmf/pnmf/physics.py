@@ -68,15 +68,20 @@ def atmospheric_absorption(f=THIRD_OCTAVE_HZ, temp_c=15.0, rel_hum=70.0,
 
 def band_sum_dba(band_spl, f=THIRD_OCTAVE_HZ):
     """Energetic sum of 1/3-octave band SPLs into one A-weighted level."""
-    la = np.asarray(band_spl, float) + a_weighting(f)
+    a_w = DEFAULT_A_WEIGHTING if f is THIRD_OCTAVE_HZ else a_weighting(f)
+    la = np.asarray(band_spl, float) + a_w
     return 10.0 * np.log10(np.sum(10.0 ** (la / 10.0), axis=-1))
+
+
+DEFAULT_A_WEIGHTING = a_weighting(THIRD_OCTAVE_HZ)
+DEFAULT_ATMOSPHERIC_ALPHA = atmospheric_absorption(THIRD_OCTAVE_HZ)
 
 
 def propagate(band_spl_1m, r_m, alpha=None):
     """Free-field propagation from the 1 m reference to distance r [m]:
     spherical spreading + atmospheric absorption per band."""
     if alpha is None:
-        alpha = atmospheric_absorption()
+        alpha = DEFAULT_ATMOSPHERIC_ALPHA
     return band_spl_1m - 20.0 * np.log10(r_m) - alpha * r_m
 
 

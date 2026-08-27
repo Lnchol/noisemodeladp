@@ -316,8 +316,9 @@ def build_accuracy_validation_dataset(
 
         pred_df = pd.DataFrame(predictions_list) if predictions_list else pd.DataFrame()
 
+        acft_map = {r["NPD_ID"]: r for r in aircraft_df.to_dict("records")}
         rows = []
-        for _, curve_row in split.iterrows():
+        for curve_row in split.to_dict("records"):
             npd_id = curve_row["npd_id"]
             raw_role = curve_row["role"]
             source = curve_row["source_dataset"]
@@ -336,14 +337,14 @@ def build_accuracy_validation_dataset(
                 ui_role = "EXCLUDED"
                 role_desc = "Excluded Candidate"
 
-            acft_matches = aircraft_df[aircraft_df["NPD_ID"] == npd_id]
-            if not acft_matches.empty:
-                desc = str(acft_matches.iloc[0]["Description"])
-                acft_id = str(acft_matches.iloc[0]["ACFT_ID"])
-                engine_type = str(acft_matches.iloc[0]["Engine Type"])
-                engine_count = int(acft_matches.iloc[0]["Number Of Engines"])
-                mtow_lb = float(acft_matches.iloc[0]["Max Gross Takeoff Weight (lb)"])
-                thrust_lb = float(acft_matches.iloc[0]["Max Sea Level Static Thrust (lb)"])
+            acft_match = acft_map.get(npd_id)
+            if acft_match is not None:
+                desc = str(acft_match.get("Description", npd_id))
+                acft_id = str(acft_match.get("ACFT_ID", npd_id))
+                engine_type = str(acft_match.get("Engine Type", "Jet"))
+                engine_count = int(acft_match.get("Number Of Engines", 2))
+                mtow_lb = float(acft_match.get("Max Gross Takeoff Weight (lb)", 0.0))
+                thrust_lb = float(acft_match.get("Max Sea Level Static Thrust (lb)", 0.0))
             else:
                 desc = EXPECTED_REFERENCE_DESCRIPTIONS.get(npd_id, npd_id)
                 acft_id = npd_id
@@ -571,39 +572,45 @@ def _accumulate_prediction_rows(
     protocol: str,
 ) -> None:
     """Accumulate point-by-point truth vs prediction values across all 10 distances."""
+    n_rows = len(samples_subset)
+    if n_rows == 0:
+        return
     truth_matrix = samples_subset.loc[:, TRUTH_COLUMNS].to_numpy(dtype=float)
-    npd_ids = samples_subset["npd_id"].to_numpy()
+    npd_ids = samples_subset["npd_id"].astype(str).to_numpy()
     power_settings = samples_subset["power_setting"].to_numpy(dtype=float)
     source_datasets = (
-        samples_subset["source_dataset"].to_numpy()
+        samples_subset["source_dataset"].astype(str).to_numpy()
         if "source_dataset" in samples_subset
-        else np.array(["unknown"] * len(samples_subset))
+        else np.array(["unknown"] * n_rows)
     )
 
-    for row_idx in range(len(samples_subset)):
-        npd_id = str(npd_ids[row_idx])
-        p_val = float(power_settings[row_idx])
-        src = str(source_datasets[row_idx])
+    n_dist = len(STANDARD_DISTANCES_FT)
+    npd_flat = np.repeat(npd_ids, n_dist)
+    p_flat = np.repeat(power_settings, n_dist)
+    src_flat = np.repeat(source_datasets, n_dist)
+    dist_flat = np.tile(STANDARD_DISTANCES_FT, n_rows)
+    truth_flat = truth_matrix.flatten()
+    pred_flat = predictions.flatten()
+    err_flat = pred_flat - truth_flat
 
-        for dist_idx, dist_ft in enumerate(STANDARD_DISTANCES_FT):
-            t_val = float(truth_matrix[row_idx, dist_idx])
-            p_pred = float(predictions[row_idx, dist_idx])
-            err = p_pred - t_val
-
-            out_list.append({
-                "protocol": protocol,
-                "model": learner,
-                "role": role,
-                "npd_id": npd_id,
-                "source_dataset": src,
-                "metric": metric,
-                "op_mode": mode,
-                "power_setting": p_val,
-                "distance_ft": float(dist_ft),
-                "truth_dB": t_val,
-                "prediction_dB": p_pred,
-                "error_dB": err,
-            })
+    batch = [
+        {
+            "protocol": protocol,
+            "model": learner,
+            "role": role,
+            "npd_id": npd_flat[i],
+            "source_dataset": src_flat[i],
+            "metric": metric,
+            "op_mode": mode,
+            "power_setting": float(p_flat[i]),
+            "distance_ft": float(dist_flat[i]),
+            "truth_dB": float(truth_flat[i]),
+            "prediction_dB": float(pred_flat[i]),
+            "error_dB": float(err_flat[i]),
+        }
+        for i in range(len(truth_flat))
+    ]
+    out_list.extend(batch)
 
 
 def load_or_build_accuracy_dataset(
