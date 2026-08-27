@@ -39,6 +39,19 @@ class JetFeatureSchema:
     uses_total_operating_cnt: bool
 
 
+JET_V3_SCHEMA_ID: Final = "jet-v3"
+_JET_V3_FEATURES: Final = (
+    TOTAL_OPERATING_FEATURE,
+    "log_mtow",
+    "log_mlw",
+    "mlw_mtow",
+    "log_thrust_per_eng",
+    "log_total_thrust",
+    "noise_chapter",
+    "log_power_lb",
+    "throttle",
+)
+
 JET_SCHEMAS: Final = (
     JetFeatureSchema("jet_compact_v1", _JET_COMPACT_FEATURES, False),
     JetFeatureSchema(
@@ -60,6 +73,7 @@ JET_SCHEMAS: Final = (
 )
 JET_CANDIDATE_SCHEMA_IDS: Final = tuple(schema.name for schema in JET_SCHEMAS)
 _JET_SCHEMA_BY_NAME: Final = {schema.name: schema for schema in JET_SCHEMAS}
+_JET_SCHEMA_BY_NAME["jet-v3"] = JetFeatureSchema("jet-v3", _JET_V3_FEATURES, True)
 
 
 def _production_schema() -> JetFeatureSchema:

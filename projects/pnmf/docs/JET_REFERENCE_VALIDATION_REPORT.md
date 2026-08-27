@@ -1,6 +1,6 @@
 # ANP v6.3 Jet Release-Holdout Validation Report
 
-> Generated 2026-08-26T14:44:05.097015+00:00 from frozen EASA ANP reference data. This is conceptual-screening evidence, not certification evidence.
+> Generated 2026-08-27T10:04:42.573465+00:00 from frozen EASA ANP reference data. This is conceptual-screening evidence, not certification evidence.
 
 ## Conclusion and evidence boundary
 
@@ -87,8 +87,8 @@ Cell-pooled results weight every power-distance cell equally. Category-balanced 
 
 ## Reproducibility and provenance
 
-- Seed `20260724`; runtime `6.886` s.
+- Seed `20260724`; runtime `7.487` s.
 - Datastore SHA-256 `ab1a1a23865bc3faecf80671b83f6f114cdce2cc79deb32b7687a3cd3930a8d7`.
 - Source-manifest SHA-256 `47159f7920dade49b20ded44f4300b6f3c4c83865f95ac5c47d274f0e67fde36`.
-- Git `595a25979ed3104ff17f698fbd73488addf6cd8b`, dirty `True`.
+- Git `7243f8a12948de9d2d083c26e5f67742e3944bd3`, dirty `False`.
 - Full candidate scores, reference metadata, split exclusions, predictions, fit records, summaries, source manifest, artifact hashes and official URLs are in `outputs/model_validation/jet_reference_v63`.

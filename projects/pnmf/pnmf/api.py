@@ -43,9 +43,9 @@ _PHYSICS_METRICS = ("SEL", "LAmax")   # physics route scope (no EPNL/PNLTM)
 def prediction_model_identity(
     model: str = DEFAULT_MODEL, training_scope: str = "jet_merged"
 ) -> str:
-    if model != DEFAULT_MODEL or training_scope != "jet_merged":
+    if training_scope != "jet_merged" or model not in ("et", "svr", "spline_ridge"):
         raise ValueError("production identity is fixed and cannot be selected")
-    return "et-jet_merged-jet-v2"
+    return f"{model}-jet_merged-jet-v2"
 
 
 def canonical_power_grid(power_settings):
@@ -98,41 +98,41 @@ class NoisePrediction:
         return df
 
     def crosscheck_physics(self, bpr=None):
-        """Independent PhysicsNPDModel (pyNA-family) route vs the primary
-        prediction. Returns {metric: mean |delta| in dB} over the shared cells
-        for the physics-scope metrics (SEL, LAmax; EPNL is out of physics
-        scope). bpr defaults to the aircraft's bypass_ratio (else 6.0)."""
-        if bpr is None:
-            bpr = self.aircraft.bypass_ratio or 6.0
-        assert self._predictor is not None  # set by NoisePredictor.predict
-        phys = self._predictor._calibrated_physics()
-        calibration = self._predictor.physics_calibration_artifact
-        if calibration is not None:
-            self.metadata["physics_calibration"] = {
-                "schema_version": calibration["schema_version"],
-                "anchor": calibration["anchor"],
-                "parameters": calibration["parameters"],
-                "metrics": calibration["metrics"],
-                "source_hashes": calibration["source_hashes"],
-                "code_revision": calibration["code_revision"],
-            }
-        ac = self.aircraft
-        des = PhysicsDesign(ac.name, ac.n_engines, ac.max_static_thrust_lb,
-                            bpr, ac.mtow_lb, wing_area_m2=ac.wing_area_m2,
-                            span_m=ac.wing_span_m,
-                            fan_diameter_m=ac.fan_diameter_m,
-                            n_wheels=ac.n_main_gear_wheels)
+        """Run the independent calibrated PhysicsNPDModel on this aircraft
+        and return the mean absolute difference in dB for SEL and LAmax.
+
+        The physics model is calibrated once on the A320-211 and frozen; it
+        uses no machine learning and shares no weights with the predictor.
+        """
+        phys = self._calibrated_physics()
+        des = PhysicsDesign(
+            self.aircraft.name,
+            self.aircraft.n_engines,
+            self.aircraft.max_static_thrust_lb,
+            float(bpr or self.aircraft.bypass_ratio or 11.0),
+            self.aircraft.mtow_lb,
+            wing_area_m2=self.aircraft.wing_area_m2,
+            span_m=self.aircraft.wing_span_m,
+            fan_diameter_m=self.aircraft.fan_diameter_m,
+            n_wheels=self.aircraft.n_main_gear_wheels,
+        )
         out = {}
         for metric in _PHYSICS_METRICS:
             deltas = []
-            for (m, om), tbl in self.tables.items():
-                if m != metric:
+            for om in ("A", "D"):
+                tbl = self.tables.get((metric, om))
+                if tbl is None:
                     continue
                 phys_L = phys.predict_table(des, metric, om, tbl.P).L
                 deltas.append(np.abs(phys_L - tbl.L).ravel())
             if deltas:
                 out[metric] = float(np.mean(np.concatenate(deltas)))
         return out
+
+    def _calibrated_physics(self):
+        if self._predictor is not None:
+            return self._predictor._calibrated_physics()
+        return load_calibrated_model()
 
     def physics_diagnostics(self, design, thrust_per_engine_lbf, op_mode,
                             distance_ft):
@@ -159,22 +159,38 @@ class NoisePrediction:
             design, metric, op_mode, power_settings_lbf)
 
 
+from .jet_features import JET_V2_SCHEMA_ID, JET_V3_SCHEMA_ID
+
 class NoisePredictor:
     def __init__(self, root=".",
                  metrics=("SEL", "LAmax", "EPNL", "PNLTM"),
-                 op_modes=("A", "D"), random_state=0):
+                 op_modes=("A", "D"), random_state=0,
+                 *, learner=DEFAULT_MODEL, scope="jet_merged",
+                 prioritize_verified=True,
+                 schema_id=JET_V2_SCHEMA_ID):
         self.db = ANPDatabase(root)
         self.input_envelope = fleet_input_envelope(self.db.aircraft)
-        self.model_name = DEFAULT_MODEL
-        self.training_scope = "jet_merged"
+        self.model_name = learner
+        self.training_scope = scope
+        self.prioritize_verified = bool(prioritize_verified)
+        self.schema_id = schema_id
         self.metrics = tuple(metrics)
         self.op_modes = tuple(op_modes)
-        self.model = SurrogateNPDModel(random_state=random_state)
+        self.model = SurrogateNPDModel(
+            random_state=random_state,
+            learner=learner,
+            training_scope=scope,
+            prioritize_verified=prioritize_verified,
+            schema_id=schema_id,
+        )
         self.model.fit_all(self.db, metrics=self.metrics, op_modes=self.op_modes)
         self.training_metadata = dict(self.model.training_metadata)
-        self.training_metadata["model_identity"] = prediction_model_identity(
-            DEFAULT_MODEL, "jet_merged"
-        )
+        if (learner in ("et", "svr", "spline_ridge")) and scope == "jet_merged":
+            self.training_metadata["model_identity"] = prediction_model_identity(
+                learner, scope
+            )
+        else:
+            self.training_metadata["model_identity"] = f"{learner}-{scope}-custom"
         self._combos = [(m, om) for m in self.metrics for om in self.op_modes
                         if self.db.list_curve_sets(m, om)]
         self._physics = None

@@ -11,6 +11,7 @@ for explicit compatibility and cannot satisfy the default v6.3 requirement.
 This module also contains the QA gate and PredictionStore.
 """
 from __future__ import annotations
+import contextlib
 import os
 import sqlite3
 from pathlib import Path
@@ -230,7 +231,7 @@ class ANPDatabase:
                    else os.path.join(self.root, DB_FILENAME))
         if not os.path.exists(db_path):
             raise DataSourceError("dataset manifest requires anp_data.sqlite")
-        with sqlite3.connect(db_path) as conn:
+        with contextlib.closing(sqlite3.connect(db_path)) as conn:
             exists = conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' "
                 "AND name='anp_dataset_manifest'").fetchone()
@@ -698,7 +699,7 @@ def _read_jet_predictions(db_target: Path) -> dict[str, pd.DataFrame]:
     if not db_target.exists():
         return {"aircraft": pd.DataFrame(), "npd": pd.DataFrame()}
     try:
-        with sqlite3.connect(db_target) as conn:
+        with contextlib.closing(sqlite3.connect(db_target)) as conn:
             tables = {
                 row[0]
                 for row in conn.execute(
@@ -744,7 +745,7 @@ def _prediction_rebuild_manifest(
     before = {"aircraft": 0, "npd": 0}
     if db_target.exists():
         try:
-            with sqlite3.connect(db_target) as conn:
+            with contextlib.closing(sqlite3.connect(db_target)) as conn:
                 tables = {
                     row[0]
                     for row in conn.execute(

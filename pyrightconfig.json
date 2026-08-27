@@ -1,0 +1,7 @@
+{
+  "venvPath": "projects/pnmf",
+  "venv": ".venv",
+  "extraPaths": [
+    "projects/pnmf"
+  ]
+}

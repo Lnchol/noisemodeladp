@@ -1,5 +1,6 @@
 """Learning-layer tests for the supported ET/RF and storage surfaces."""
 
+import contextlib
 import os
 import shutil
 import sqlite3
@@ -134,7 +135,7 @@ def test_prediction_store_roundtrip_and_truth_isolation(db_path):
     good = _good_table(ac.name)
     bad = NPDTable(good.P, good.L[:, ::-1], "SEL", "A")  # increasing w/ dist
 
-    with sqlite3.connect(db_path) as conn:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
         truth_rows_before = conn.execute(
             "SELECT COUNT(*) FROM anp_npd_data").fetchone()[0]
 
@@ -156,9 +157,59 @@ def test_prediction_store_roundtrip_and_truth_isolation(db_path):
     assert len(store.npd(name=ac.name)) == 3
 
     # the ANP truth tables were not touched
-    with sqlite3.connect(db_path) as conn:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
         truth_rows_after = conn.execute(
             "SELECT COUNT(*) FROM anp_npd_data").fetchone()[0]
     assert truth_rows_after == truth_rows_before
     # and ANPDatabase still loads cleanly from the same file
     assert ANPDatabase(db_path).npd.shape[0] == truth_rows_before
+
+
+def test_surrogate_npd_model_supports_svr_and_spline_ridge(db_path):
+    from pnmf.models import SurrogateNPDModel
+
+    db = ANPDatabase(db_path)
+    ac = ParametricAircraft(name="TEST-SVR", max_static_thrust_lb=27000,
+                            mtow_lb=170000, mlw_lb=140000, n_engines=2)
+    for learner in ("svr", "spline_ridge"):
+        model = SurrogateNPDModel(learner=learner, prioritize_verified=True)
+        model.fit(db, "SEL", "D")
+        tbl = model.predict_table(ac, "SEL", "D", [18000.0, 24000.0])
+        assert isinstance(tbl, NPDTable)
+        assert tbl.L.shape == (2, 10)
+        # Check distance monotonicity (strictly non-increasing with distance)
+        assert np.all(np.diff(tbl.L, axis=1) <= 1e-9)
+
+
+def test_noise_predictor_supports_svr_and_verified_prioritization(db_path):
+    from pnmf.api import NoisePredictor
+
+    ac = ParametricAircraft(name="TEST-API-SVR", max_static_thrust_lb=27000,
+                            mtow_lb=170000, mlw_lb=140000, n_engines=2, bypass_ratio=11.0)
+    pred = NoisePredictor(root=os.path.dirname(db_path), learner="svr", prioritize_verified=True)
+    res = pred.predict(ac)
+    assert ("SEL", "D") in res.tables
+    assert res.metadata["learner"] == "svr"
+    assert res.metadata["prioritize_verified"] is True
+    assert res.metadata["verified_weight_multiplier"] == 3.0
+    cross = res.crosscheck_physics()
+    assert "SEL" in cross and cross["SEL"] >= 0.0
+
+
+def test_surrogate_npd_model_supports_jet_v3_log_power_schema(db_path):
+    from pnmf.models import SurrogateNPDModel
+    from pnmf.jet_features import JET_V3_SCHEMA_ID, jet_feature_names
+
+    db = ANPDatabase(db_path)
+    ac = ParametricAircraft(name="TEST-JET-V3", max_static_thrust_lb=27000,
+                            mtow_lb=170000, mlw_lb=140000, n_engines=2)
+    model = SurrogateNPDModel(learner="svr", schema_id=JET_V3_SCHEMA_ID)
+    assert model.feature_schema == "jet-v3"
+    assert model.feat_names == list(jet_feature_names("jet-v3"))
+    assert "log_total_operating_cnt_lb" in model.feat_names
+    assert "n_engines" not in model.feat_names
+    model.fit(db, "SEL", "D")
+    tbl = model.predict_table(ac, "SEL", "D", [18000.0, 24000.0])
+    assert tbl.L.shape == (2, 10)
+    assert np.all(np.diff(tbl.L, axis=1) <= 1e-9)
+

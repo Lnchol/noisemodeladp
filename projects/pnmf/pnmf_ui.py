@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 try:
-    import streamlit as st 
+    import streamlit as st  # type: ignore[import-untyped,import-not-found]  # pyrefly: ignore [missing-import]
 except ImportError as err:
     raise SystemExit(
         "Streamlit is required to launch the PNMF UI.\n"
@@ -277,9 +277,21 @@ def get_db(version: str):
 
 
 @st.cache_resource(show_spinner=False)
-def get_predictor(version: str):
+def get_predictor(
+    version: str,
+    learner: str = "svr",
+    training_scope: str = "jet_merged",
+    prioritize_verified: bool = True,
+    schema_id: str = "jet-v2",
+):
     _ = version                      # keys the cache; unused in the body
-    return NoisePredictor(".")
+    return NoisePredictor(
+        ".",
+        learner=learner,
+        scope=training_scope,
+        prioritize_verified=prioritize_verified,
+        schema_id=schema_id,
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -652,8 +664,47 @@ def page_designer():
 
     # ---- advanced prediction settings -----------------------------------
     with st.expander("Advanced prediction settings"):
-        st.caption("Extra Trees is the fixed production model. Use custom NPD "
-                   "row powers only when a specific engine deck is available.")
+        selected_learner = st.selectbox(
+            "Learned Model Architecture",
+            options=["et", "svr", "spline_ridge", "rf"],
+            format_func=lambda m: {
+                "svr": "Support Vector Regression (RBF SVR — 1.39 dB RMSE High-Precision)",
+                "et": "Extra Trees (1.78 dB RMSE — Production Baseline)",
+                "spline_ridge": "Spline Basis Ridge Regression (1.66 dB RMSE)",
+                "rf": "Random Forest (2.36 dB RMSE)",
+            }.get(m, m),
+            index=0,
+            key="f_advanced_learner",
+            help="Select the ML surrogate model. SVR with Gaussian RBF kernel delivers optimal acoustic accuracy and smooth physical distance monotonicity.",
+        )
+        selected_scope = st.selectbox(
+            "Training Scope",
+            options=["jet_merged", "verified"],
+            format_func=lambda s: {
+                "jet_merged": "Complete Jet Corpus (93 aircraft / 2,628 curves)",
+                "verified": "EASA Verified Only (11 modern aircraft)",
+            }.get(s, s),
+            index=0,
+            key="f_advanced_scope",
+        )
+        selected_schema = st.selectbox(
+            "Feature Schema",
+            options=["jet-v2", "jet-v3"],
+            format_func=lambda s: {
+                "jet-v2": "jet-v2 (Production Baseline)",
+                "jet-v3": "jet-v3 (Log-Power Sound Power Scaling)",
+            }.get(s, s),
+            index=0,
+            key="f_advanced_schema",
+            help="Selects whether the model conditions on discrete engine count (v2) or continuous log acoustic sound power output (v3).",
+        )
+        prioritize_v = st.checkbox(
+            "Prioritize EASA verified aircraft in training (3.0x sample weighting)",
+            value=True,
+            key="f_prioritize_verified",
+            help="Assigns 3x weight to verified modern aircraft (e.g. A320neo, A350, B787) during model training for higher precision.",
+        )
+        st.divider()
         st.caption("Enter comma-separated corrected net thrust values per engine. "
                    "These are NPD table row powers, not the engine's maximum "
                    "static rating. Leave either field blank to use its existing "
@@ -678,13 +729,19 @@ def page_designer():
     learned_log_slot = st.empty()
     if run_clicked:
         ac = _aircraft_from_state()
-        model = PRODUCTION_MODEL
-        training_scope = PRODUCTION_SCOPE
+        model = selected_learner
+        training_scope = selected_scope
         st.session_state.setdefault("calculation_logs", {}).pop(
             "physics", None)
+        learner_display = {
+            "svr": "RBF SVR High-Precision",
+            "et": "Extra Trees",
+            "spline_ridge": "Spline Ridge",
+            "rf": "Random Forest",
+        }.get(model, model)
         calc_log = _CalculationLog(
             "learned",
-            "Extra Trees aircraft analysis",
+            f"{learner_display} aircraft analysis",
             learned_log_slot)
         calc_log.add(
             "AIRCRAFT",
@@ -705,13 +762,20 @@ def page_designer():
             calc_log.add(
                 "POWER GRID",
                 f"Canonicalize corrected net thrust rows: {power_note}")
+            priority_note = " with 3x verified weight" if prioritize_v else ""
             calc_log.add(
                 "MODEL CACHE",
-                "Resolve the fixed Extra Trees predictor for the current "
-                "datastore; fit the complete Jet population on cache miss")
+                f"Resolve {learner_display} predictor on {training_scope} "
+                f"population{priority_note}")
             with st.spinner(
-                    "Fitting Extra Trees on the complete Jet population and predicting…"):
-                predictor = get_predictor(version)
+                    f"Fitting {learner_display} on {training_scope} population and predicting…"):
+                predictor = get_predictor(
+                    version,
+                    learner=model,
+                    training_scope=training_scope,
+                    prioritize_verified=prioritize_v,
+                    schema_id=selected_schema,
+                )
                 calc_log.add(
                     "FEATURES",
                     "Build aircraft descriptors plus log10(power/engine) "
@@ -754,7 +818,8 @@ def page_designer():
             st.session_state["pred_meta"] = {
                 "model": model, "version": version,
                 "training_scope": training_scope,
-                "model_identity": prediction_model_identity(),
+                "prioritize_verified": prioritize_v,
+                "model_identity": pred.metadata.get("model_identity", f"{model}-{training_scope}-custom"),
                 "training_metadata": pred.metadata,
                 "aircraft": ac.to_dict(), "name": ac.name}
             st.session_state.pop("crosscheck", None)   # stale on new predict
@@ -1818,7 +1883,12 @@ def page_physics(*, embedded=False, compare_learned=True):
                         "SYNC",
                         "Recalculate learned tables for the selected physics "
                         "aircraft before comparison")
-                    working_pred = get_predictor(meta["version"]).predict(ac)
+                    working_pred = get_predictor(
+                        meta["version"],
+                        learner=meta.get("model", "svr"),
+                        training_scope=meta.get("training_scope", "jet_merged"),
+                        prioritize_verified=meta.get("prioritize_verified", True),
+                    ).predict(ac)
                 diagnostics = working_pred.physics_diagnostics(
                     design, thrust_lbf, op_mode, distance_ft)
                 calc_log.add(

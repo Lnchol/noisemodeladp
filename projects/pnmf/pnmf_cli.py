@@ -118,6 +118,14 @@ def cmd_predict():
         ap.add_argument("--approach-powers", default=None, metavar="LBF,...",
                         help="optional approach NPD row powers [lbf/engine], "
                              "for example 2500,4500,6500")
+        ap.add_argument("--model", default="et", choices=["et", "svr", "spline_ridge", "rf"],
+                        help="regression learner: et (Extra Trees production), svr (High-Precision RBF SVR), spline_ridge, rf")
+        ap.add_argument("--training-scope", default="jet_merged", choices=["jet_merged", "verified"],
+                        help="training dataset scope (jet_merged or verified)")
+        ap.add_argument("--schema", default="jet-v2", choices=["jet-v2", "jet-v3"],
+                        help="feature schema: jet-v2 (production), jet-v3 (log-power sound power scaling)")
+        ap.add_argument("--no-prioritize-verified", action="store_true",
+                        help="disable 3x sample weighting for EASA verified aircraft in training")
         ap.add_argument("--db", default=DB_FILENAME)
         ap.add_argument("--dry-run", action="store_true",
                         help="predict and QA-check but do not write to the database")
@@ -142,8 +150,24 @@ def cmd_predict():
         except ValueError as exc:
             sys.exit(f"invalid NPD power grid: {exc}")
 
-        print("[1/4] fitting Extra Trees on the complete Jet population ...")
-        pred = NoisePredictor(root=".")
+        learner_display = {
+            "et": "Extra Trees (Production Baseline)",
+            "svr": "Support Vector Regression (RBF SVR High-Precision)",
+            "spline_ridge": "Spline Basis Ridge Regression",
+            "rf": "Random Forest",
+        }.get(args.model, args.model)
+
+        prioritize = not args.no_prioritize_verified
+        priority_str = " [EASA verified aircraft prioritized 3x]" if prioritize else ""
+        schema_str = f" [{args.schema} log-power]" if args.schema == "jet-v3" else ""
+        print(f"[1/4] fitting {learner_display} on {args.training_scope} population{priority_str}{schema_str} ...")
+        pred = NoisePredictor(
+            root=".",
+            learner=args.model,
+            scope=args.training_scope,
+            prioritize_verified=prioritize,
+            schema_id=args.schema,
+        )
 
         try:
             print(f"[2/4] predicting NPD tables for {aircraft.name} ...")
@@ -152,16 +176,17 @@ def cmd_predict():
             sys.exit(f"prediction input rejected: {exc}")
 
         print(
-            "      model: Extra Trees; training population: complete Jet "
+            f"      model: {learner_display}; training population: {args.training_scope} "
             f"population; features: {len(result.metadata['feature_names'])}"
         )
         print("[3/4] independent physics cross-check (SEL/LAmax) ...")
         crosscheck = result.crosscheck_physics(bpr=args.bpr)
         for metric, delta in crosscheck.items():
-            print(f"      {metric}: mean |physics - ET| = {delta:.2f} dB")
+            print(f"      {metric}: mean |physics - {args.model.upper()}| = {delta:.2f} dB")
 
         print("[4/4] QA gate + store ...")
         store = PredictionStore(args.db)
+        model_id = result.metadata.get("model_identity") or f"{args.model}-{args.training_scope}-custom"
         if args.dry_run:
             from pnmf.anp import qa_check
             results = {}
@@ -171,7 +196,7 @@ def cmd_predict():
                     tbl.P, tbl.L, std, crosscheck_db=crosscheck.get(metric))
         else:
             results = store.add(aircraft, result.tables, result.uncertainty,
-                                model=prediction_model_identity(),
+                                model=model_id,
                                 crosscheck=crosscheck,
                                 metadata=result.metadata)
 
@@ -191,7 +216,7 @@ def cmd_predict():
         print(f"\nsummary: {n_ok} ok, {n_caution} caution, {n_rejected} rejected"
               + (" (dry run - nothing written)" if args.dry_run else
                  f" -> {args.db} [predicted_npd / predicted_aircraft; "
-                 "model=Extra Trees production]"))
+                 f"model={args.model}]"))
         if not args.dry_run and (n_ok + n_caution):
             df = store.npd(name=aircraft.name)
             print(f"database now holds {len(df)} predicted NPD rows for "

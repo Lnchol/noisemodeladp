@@ -14,7 +14,7 @@ A failed candidate gate keeps the compact production feature set. Production pro
 ## Learned-model comparison
 
 - ET group/task-balanced RMSE: `4.451 dB`; RF validation RMSE: `4.828 dB`.
-- Paired aircraft-group ET minus RF bootstrap interval: `[-0.8165001554283714, -0.019265505600574072]` dB; RF cannot become the production learner through this workflow.
+- Paired aircraft-group ET minus RF bootstrap interval: `[-0.8165001554283696, -0.019265505600573204]` dB; RF cannot become the production learner through this workflow.
 - Equal task weighting is applied after aircraft-group balancing. Selected-schema task RMSE:
 - `EPNL/A`: `4.089 dB`
 - `EPNL/D`: `5.088 dB`

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import inspect
 from pathlib import Path
 import shutil
@@ -38,7 +39,7 @@ def test_production_identity_is_fixed_to_et_jet_v2() -> None:
 
 def test_mixed_datastore_fails_closed(tmp_path) -> None:
     db_path = tmp_path / "mixed.sqlite"
-    with sqlite3.connect(db_path) as connection:
+    with contextlib.closing(sqlite3.connect(db_path)) as connection, connection:
         pd.DataFrame(
             [{"Engine Type": "Turboprop", "NPD_ID": "P1"}]
         ).to_sql("anp_aircraft", connection, index=False)
@@ -57,7 +58,7 @@ def test_stale_jet_datastore_schema_fails_closed(tmp_path) -> None:
     source = Path(__file__).resolve().parents[1] / "anp_data.sqlite"
     db_path = tmp_path / "stale.sqlite"
     shutil.copyfile(source, db_path)
-    with sqlite3.connect(db_path) as connection:
+    with contextlib.closing(sqlite3.connect(db_path)) as connection, connection:
         connection.execute("UPDATE anp_meta SET schema_version = -1")
 
     with pytest.raises(DataIntegrityError, match="stale datastore schema"):
@@ -85,7 +86,7 @@ def test_jet_datastore_builder_reports_population_contract(tmp_path) -> None:
 
     build_datastore(root=".", db_path=target)
 
-    with sqlite3.connect(target) as connection:
+    with contextlib.closing(sqlite3.connect(target)) as connection:
         meta = pd.read_sql_query("SELECT * FROM anp_meta", connection).iloc[0]
         aircraft = pd.read_sql_query("SELECT * FROM anp_aircraft", connection)
         npd = pd.read_sql_query("SELECT * FROM anp_npd_data", connection)

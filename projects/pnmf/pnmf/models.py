@@ -6,21 +6,33 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
 from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import RidgeCV
+from sklearn.multioutput import MultiOutputRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import SplineTransformer, StandardScaler
+from sklearn.svm import SVR
 
 from .anp import DIST_COLS
 from .core import NPDTable, ParametricAircraft, STANDARD_DISTANCES_FT
 from .jet_features import (
     JET_V2_SCHEMA_ID,
+    JET_V3_SCHEMA_ID,
     build_jet_feature_matrix,
     jet_feature_names,
     validate_jet_power_parameter,
 )
 from .jet_v2_promotion import JET_V2_VALIDATION_REPORT_SHA256
-from .verified_anp import REGISTRY_VERSION, resolve_training_scope
+from .verified_anp import (
+    REGISTRY_VERSION,
+    TRAINABLE_NPD_IDS,
+    resolve_training_scope,
+)
 
 _LOGD = np.log10(STANDARD_DISTANCES_FT)
 SUPPORTED_LEARNERS = ("et", "rf")
-SUPPORTED_TRAINING_SCOPES = ("jet_merged",)
+AVAILABLE_LEARNERS = ("et", "rf", "svr", "spline_ridge")
+SUPPORTED_TRAINING_SCOPES = ("jet_merged", "verified", "merged")
+DEFAULT_VERIFIED_WEIGHT_MULTIPLIER = 3.0
 
 
 def power_features(P, power_parameter, static_thrust_lb):
@@ -73,26 +85,62 @@ def validation_regressor(learner: str, random_state: int):
             random_state=random_state,
             n_jobs=-1,
         )
+    if learner == "svr":
+        return Pipeline([
+            ("scaler", StandardScaler()),
+            (
+                "svr",
+                MultiOutputRegressor(
+                    SVR(kernel="rbf", C=100.0, epsilon=0.1, gamma="scale")
+                ),
+            ),
+        ])
+    if learner == "spline_ridge":
+        return Pipeline([
+            ("scaler", StandardScaler()),
+            ("spline", SplineTransformer(n_knots=5, degree=3, extrapolation="linear")),
+            ("ridge", RidgeCV(alphas=np.logspace(-3, 3, 20))),
+        ])
     raise ValueError(f"unsupported validation learner {learner!r}")
 
 
 class SurrogateNPDModel:
-    def __init__(self, random_state=0, monotone=True):
+    def __init__(
+        self,
+        random_state=0,
+        monotone=True,
+        *,
+        learner="et",
+        training_scope="jet_merged",
+        prioritize_verified=True,
+        verified_weight_multiplier=DEFAULT_VERIFIED_WEIGHT_MULTIPLIER,
+        schema_id=JET_V2_SCHEMA_ID,
+    ):
         if isinstance(random_state, str):
-            raise TypeError("learner selection is validation-only")
-        self.learner = "et"
+            raise TypeError("learner selection is validation-only / keyword-only")
+        if learner not in AVAILABLE_LEARNERS:
+            raise ValueError(
+                f"unsupported learner {learner!r}; expected one of {AVAILABLE_LEARNERS}"
+            )
+        if training_scope not in SUPPORTED_TRAINING_SCOPES:
+            raise ValueError(
+                f"unsupported training scope {training_scope!r}; expected one of {SUPPORTED_TRAINING_SCOPES}"
+            )
+        self.learner = learner
         self.random_state = random_state
         self.monotone = monotone
-        self.training_scope = "jet_merged"
+        self.training_scope = training_scope
+        self.prioritize_verified = bool(prioritize_verified)
+        self.verified_weight_multiplier = float(verified_weight_multiplier)
         self.models = {}
         self.training_provenance = {}
         self.training_resolution = None
         self.training_metadata = {}
-        self.feature_schema = JET_V2_SCHEMA_ID
-        self.feat_names = list(jet_feature_names(JET_V2_SCHEMA_ID))
+        self.feature_schema = schema_id
+        self.feat_names = list(jet_feature_names(schema_id))
 
     def _new_regressor(self):
-        return validation_regressor("et", self.random_state)
+        return validation_regressor(self.learner, self.random_state)
 
     def _feature_matrix(self, aircraft, power_settings, power_parameter):
         if aircraft.engine_type != "Jet":
@@ -103,14 +151,22 @@ class SurrogateNPDModel:
             power, power_parameter, aircraft.max_static_thrust_lb
         )
         return build_jet_feature_matrix(
-            aircraft.feature_vector(), log_power, throttle, JET_V2_SCHEMA_ID
+            aircraft.feature_vector(), log_power, throttle, self.feature_schema
         )
 
-    def _design_matrix(self, db, metric, op_mode, exclude_ids=(), resolution=None):
+    def _design_matrix(
+        self,
+        db,
+        metric,
+        op_mode,
+        exclude_ids=(),
+        resolution=None,
+        return_weights=False,
+    ):
         if resolution is None:
             resolution = resolve_training_scope(
                 db,
-                "jet_merged",
+                self.training_scope,
                 metrics=(metric,),
                 op_modes=(op_mode,),
                 exclude_ids=exclude_ids,
@@ -119,6 +175,7 @@ class SurrogateNPDModel:
         features = []
         truth = []
         groups = []
+        weights = []
         for npd_id in resolution.selected_npd_ids:
             descriptor = params.loc[npd_id]
             aircraft = ParametricAircraft.from_anp_row(npd_id, descriptor)
@@ -129,9 +186,27 @@ class SurrogateNPDModel:
                 descriptor["Power Parameter"],
             )
             curve_truth = curve[DIST_COLS].to_numpy(dtype=float)
+            n_rows = len(curve_truth)
             features.extend(matrix)
             truth.extend(curve_truth)
-            groups.extend([npd_id] * len(curve_truth))
+            groups.extend([npd_id] * n_rows)
+            is_verified = (npd_id in TRAINABLE_NPD_IDS) or (
+                "source_dataset" in curve
+                and (curve["source_dataset"] == "supplement_v6.3").any()
+            )
+            w = (
+                self.verified_weight_multiplier
+                if (self.prioritize_verified and is_verified)
+                else 1.0
+            )
+            weights.extend([w] * n_rows)
+        if return_weights:
+            return (
+                np.asarray(features, dtype=float),
+                np.asarray(truth, dtype=float),
+                np.asarray(groups),
+                np.asarray(weights, dtype=float),
+            )
         return (
             np.asarray(features, dtype=float),
             np.asarray(truth, dtype=float),
@@ -141,13 +216,13 @@ class SurrogateNPDModel:
     def fit(self, db, metric, op_mode, exclude_ids=()):
         resolution = resolve_training_scope(
             db,
-            "jet_merged",
+            self.training_scope,
             metrics=(metric,),
             op_modes=(op_mode,),
             exclude_ids=exclude_ids,
         )
-        features, truth, _ = self._design_matrix(
-            db, metric, op_mode, exclude_ids, resolution
+        features, truth, _, sample_weights = self._design_matrix(
+            db, metric, op_mode, exclude_ids, resolution, return_weights=True
         )
         curves = db.npd.loc[
             db.npd["NPD_ID"].isin(resolution.selected_npd_ids)
@@ -157,20 +232,39 @@ class SurrogateNPDModel:
         if "source_dataset" not in curves:
             raise RuntimeError("training data has no source provenance")
         provenance = curves["source_dataset"].value_counts().sort_index().to_dict()
-        if provenance.get("supplement_v6.3", 0) == 0:
+        if (
+            self.training_scope == "jet_merged"
+            and provenance.get("supplement_v6.3", 0) == 0
+        ):
             raise RuntimeError(f"{metric}/{op_mode} has no v6.3 samples")
         regressor = self._new_regressor()
-        regressor.fit(features, truth)
+
+        fit_kwargs = {}
+        if self.prioritize_verified:
+            if self.learner in ("et", "rf"):
+                fit_kwargs["sample_weight"] = sample_weights
+            elif self.learner == "svr":
+                fit_kwargs["svr__sample_weight"] = sample_weights
+            elif self.learner == "spline_ridge":
+                fit_kwargs["ridge__sample_weight"] = sample_weights
+
+        regressor.fit(features, truth, **fit_kwargs)
         self.models[(metric, op_mode)] = regressor
         self.training_resolution = resolution
         self.training_provenance[(metric, op_mode)] = provenance
         if not self.training_metadata:
             self.training_metadata = {
-                "learner": "et",
-                "scope": "jet_merged",
+                "learner": self.learner,
+                "scope": self.training_scope,
+                "prioritize_verified": self.prioritize_verified,
+                "verified_weight_multiplier": (
+                    self.verified_weight_multiplier
+                    if self.prioritize_verified
+                    else 1.0
+                ),
                 "feature_schema": self.feature_schema,
                 "feature_names": list(self.feat_names),
-                "training_population": "jet_merged",
+                "training_population": self.training_scope,
                 "registry_version": REGISTRY_VERSION,
                 "source_hashes": {
                     "verified_workbook": resolution.source_hashes.verified_workbook,
@@ -248,10 +342,12 @@ class SurrogateNPDModel:
         )
         if not return_std:
             return table
-        predictions = np.stack(
-            [tree.predict(features) for tree in regressor.estimators_], axis=0
-        )
-        return table, predictions.std(axis=0)
+        if hasattr(regressor, "estimators_"):
+            predictions = np.stack(
+                [tree.predict(features) for tree in regressor.estimators_], axis=0
+            )
+            return table, predictions.std(axis=0)
+        return table, np.zeros_like(levels)
 
     def generate_full(
         self,
