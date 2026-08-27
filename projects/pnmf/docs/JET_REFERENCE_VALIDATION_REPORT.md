@@ -1,6 +1,6 @@
 # ANP v6.3 Jet Release-Holdout Validation Report
 
-> Generated 2026-07-24T12:20:39.734044+00:00 from frozen EASA ANP reference data. This is conceptual-screening evidence, not certification evidence.
+> Generated 2026-08-26T14:44:05.097015+00:00 from frozen EASA ANP reference data. This is conceptual-screening evidence, not certification evidence.
 
 ## Conclusion and evidence boundary
 
@@ -53,21 +53,21 @@ Cell-pooled results weight every power-distance cell equally. Category-balanced 
 
 | model | aggregation | engine_count_category | rmse_dB | mae_dB | bias_dB | p90_abs_error_dB | pct_within_3_dB | pct_within_5_dB | n_cells |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| et | category_balanced | all | 3.931 | 3.213 | 0.459 | 6.010 | 50.648 | 73.343 | 1160 |
-| et | cell_pooled | all | 3.953 | 3.239 | 0.545 | 6.425 | 50.000 | 72.931 | 1160 |
-| rf | category_balanced | all | 3.868 | 3.193 | 0.413 | 5.785 | 51.972 | 74.491 | 1160 |
-| rf | cell_pooled | all | 3.900 | 3.231 | 0.491 | 6.398 | 51.121 | 73.966 | 1160 |
+| et | category_balanced | all | 3.919 | 3.221 | 0.511 | 5.976 | 50.519 | 73.343 | 1160 |
+| et | cell_pooled | all | 3.943 | 3.250 | 0.595 | 6.421 | 49.828 | 72.931 | 1160 |
+| rf | category_balanced | all | 3.858 | 3.186 | 0.420 | 5.734 | 52.157 | 74.407 | 1160 |
+| rf | cell_pooled | all | 3.890 | 3.223 | 0.500 | 6.387 | 51.293 | 73.879 | 1160 |
 
 ## Results by reference category
 
 | model | aggregation | engine_count_category | rmse_dB | mae_dB | bias_dB | p90_abs_error_dB | pct_within_3_dB | pct_within_5_dB | n_cells |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| et | cell_pooled | 2 | 3.240 | 2.440 | -2.021 | 5.972 | 69.444 | 85.278 | 360 |
-| et | cell_pooled | 3 | 2.993 | 2.232 | -1.562 | 5.386 | 74.500 | 88.000 | 400 |
-| et | cell_pooled | 4 | 5.187 | 4.966 | 4.961 | 6.672 | 8.000 | 46.750 | 400 |
-| rf | cell_pooled | 2 | 2.765 | 2.087 | -1.855 | 5.222 | 76.667 | 89.722 | 360 |
-| rf | cell_pooled | 3 | 3.121 | 2.503 | -1.894 | 5.271 | 67.000 | 88.500 | 400 |
-| rf | cell_pooled | 4 | 5.244 | 4.987 | 4.987 | 6.863 | 12.250 | 45.250 | 400 |
+| et | cell_pooled | 2 | 3.144 | 2.373 | -1.909 | 5.782 | 70.556 | 85.278 | 360 |
+| et | cell_pooled | 3 | 3.014 | 2.300 | -1.544 | 5.419 | 73.000 | 88.250 | 400 |
+| et | cell_pooled | 4 | 5.207 | 4.990 | 4.986 | 6.728 | 8.000 | 46.500 | 400 |
+| rf | cell_pooled | 2 | 2.777 | 2.093 | -1.874 | 5.240 | 77.222 | 89.722 | 360 |
+| rf | cell_pooled | 3 | 3.071 | 2.468 | -1.860 | 5.096 | 67.500 | 89.000 | 400 |
+| rf | cell_pooled | 4 | 5.246 | 4.996 | 4.996 | 6.866 | 11.750 | 44.500 | 400 |
 
 ![Overall metrics](jet_reference_assets/jet_reference_metrics.png)
 
@@ -87,8 +87,8 @@ Cell-pooled results weight every power-distance cell equally. Category-balanced 
 
 ## Reproducibility and provenance
 
-- Seed `20260724`; runtime `7.857` s.
-- Datastore SHA-256 `9b3ea2f58347ebb348128c49b3238e6a0b28852858fa7e87c89fad51d5e9fe8e`.
-- Source-manifest SHA-256 `316d3362f1b064a54f6be1f026a11c3fe297a0172e4ad95fc44ba4e7e8e0683f`.
-- Git `fa736685444f0ebdd64f019f21b3a368007b823d`, dirty `True`.
+- Seed `20260724`; runtime `6.886` s.
+- Datastore SHA-256 `ab1a1a23865bc3faecf80671b83f6f114cdce2cc79deb32b7687a3cd3930a8d7`.
+- Source-manifest SHA-256 `47159f7920dade49b20ded44f4300b6f3c4c83865f95ac5c47d274f0e67fde36`.
+- Git `595a25979ed3104ff17f698fbd73488addf6cd8b`, dirty `True`.
 - Full candidate scores, reference metadata, split exclusions, predictions, fit records, summaries, source manifest, artifact hashes and official URLs are in `outputs/model_validation/jet_reference_v63`.

@@ -2,7 +2,7 @@
 # Usage: .\pnmf.ps1 [task] [args...]
 # With no task, PNMF creates/updates its local .venv and launches the web UI.
 
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter(Position = 0)]
     [string]$Task = "ui",
@@ -12,6 +12,8 @@ param(
     [switch]$Extract,
     [switch]$IncludeData,
     [switch]$ExcludeData,
+    [switch]$IncludeVenv,
+    [switch]$ExcludeVenv,
     [switch]$Force,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
@@ -159,6 +161,8 @@ switch ($Task) {
         if ($Extract) { $zipArgs["Extract"] = $true }
         if ($IncludeData) { $zipArgs["IncludeData"] = $true }
         if ($ExcludeData) { $zipArgs["ExcludeData"] = $true }
+        if ($IncludeVenv) { $zipArgs["IncludeVenv"] = $true }
+        if ($ExcludeVenv) { $zipArgs["ExcludeVenv"] = $true }
         if ($Force) { $zipArgs["Force"] = $true }
         if ($null -ne $Rest -and $Rest.Count -gt 0) {
             & (Join-Path $PSScriptRoot "tools/export_framework_zip.ps1") @zipArgs @Rest
@@ -173,6 +177,8 @@ switch ($Task) {
         if (-not [string]::IsNullOrWhiteSpace($ExtractTo)) { $zipArgs["ExtractTo"] = $ExtractTo }
         if ($IncludeData) { $zipArgs["IncludeData"] = $true }
         if ($ExcludeData) { $zipArgs["ExcludeData"] = $true }
+        if ($IncludeVenv) { $zipArgs["IncludeVenv"] = $true }
+        if ($ExcludeVenv) { $zipArgs["ExcludeVenv"] = $true }
         if ($Force) { $zipArgs["Force"] = $true }
         if ($null -ne $Rest -and $Rest.Count -gt 0) {
             & (Join-Path $PSScriptRoot "tools/export_framework_zip.ps1") @zipArgs @Rest

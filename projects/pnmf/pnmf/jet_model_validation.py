@@ -90,16 +90,19 @@ def build_jet_group_folds(
     )
     if folds < 2 or folds > len(groups):
         raise JetValidationError(f"folds must be in [2, {len(groups)}]")
+    import warnings
     splitter = StratifiedGroupKFold(
         n_splits=folds, shuffle=True, random_state=seed
     )
     x = np.zeros((len(groups), 1), dtype=float)
     assignment: dict[str, int] = {}
-    for fold, (_, test_index) in enumerate(
-        splitter.split(x, groups["stratum"], groups["aircraft_group_id"])
-    ):
-        for index in test_index:
-            assignment[str(groups.iloc[index]["aircraft_group_id"])] = fold
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="The least populated class in y has only 1 members")
+        for fold, (_, test_index) in enumerate(
+            splitter.split(x, groups["stratum"], groups["aircraft_group_id"])
+        ):
+            for index in test_index:
+                assignment[str(groups.iloc[index]["aircraft_group_id"])] = fold
     groups["fold"] = groups["aircraft_group_id"].map(assignment).astype(int)
     result = curves.merge(
         groups[

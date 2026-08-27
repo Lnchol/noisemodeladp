@@ -40,7 +40,7 @@ py -3 -m venv .venv
 .venv\Scripts\python.exe pnmf_cli.py datastore
 .venv\Scripts\python.exe pnmf_cli.py manifest
 .venv\Scripts\python.exe -m pytest tests -q
-.venv\Scripts\python.exe pnmf_cli.py compare
+.venv\Scripts\python.exe pnmf_cli.py validate-jet-model
 .venv\Scripts\python.exe pnmf_cli.py physics
 ```
 

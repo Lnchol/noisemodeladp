@@ -43,6 +43,10 @@ from pnmf.physics import (
     PhysicsDesign,
 )
 from pnmf.physics_presets import PHYSICS_PRESETS
+from pnmf.accuracy_validation import (
+    build_accuracy_validation_dataset,
+    load_or_build_accuracy_dataset,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 os.chdir(PROJECT_ROOT)
@@ -291,6 +295,15 @@ def load_output_csv(path: str, mtime: float):
 def load_output_json(path: str, mtime: float):
     _ = mtime
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+@st.cache_data(show_spinner=False)
+def get_accuracy_dataset(version: str, protocol: str, force_recompute: bool = False):
+    """Fast-loading accuracy validation dataset (loads from disk cache in milliseconds)."""
+    db = get_db(version)
+    return load_or_build_accuracy_dataset(
+        db, protocol=protocol, force_recompute=force_recompute
+    )
 
 
 # ===========================================================================
@@ -1507,6 +1520,61 @@ def page_physics(*, embedded=False, compare_learned=True):
     default_wheels = int(ac.n_main_gear_wheels or
                          (4 if ac.mtow_lb * KG_PER_LB < 5e4 else 8))
 
+    # Initialize all physics session state keys if not already present
+    st.session_state.setdefault("phys_op_mode", "D")
+    st.session_state.setdefault("phys_bpr", default_bpr)
+
+    op_mode_init = st.session_state.get("phys_op_mode", "D")
+    table_key_init = ("SEL", op_mode_init)
+    table_init = None if preset else pred.tables.get(table_key_init)
+    default_thrust_init = float(
+        (table_init.P[-1] if op_mode_init == "D" else table_init.P[0])
+        if table_init is not None else
+        ac.max_static_thrust_lb * (0.85 if op_mode_init == "D" else 0.2))
+
+    st.session_state.setdefault("phys_thrust_metric", lbf_to_kn(default_thrust_init))
+    st.session_state.setdefault("phys_thrust_imperial", default_thrust_init)
+    st.session_state.setdefault("phys_distance_metric", ft_to_m(1000.0))
+    st.session_state.setdefault("phys_distance_imperial", 1000.0)
+    st.session_state.setdefault("phys_airframe_supplied", False)
+    st.session_state.setdefault("phys_wing_area", default_area)
+    st.session_state.setdefault("phys_wing_span", default_span)
+    st.session_state.setdefault("phys_flap_area", 0.17 * default_area)
+    st.session_state.setdefault("phys_flap_chord", 2.0)
+    st.session_state.setdefault("phys_flap_deg", 10.0 if op_mode_init == "D" else 30.0)
+    st.session_state.setdefault("phys_slat_area", 0.08 * default_area)
+    st.session_state.setdefault("phys_slat_chord", 0.7)
+    st.session_state.setdefault("phys_slat_deg", 20.0)
+    st.session_state.setdefault("phys_nose_wheels", 2)
+    st.session_state.setdefault("phys_main_wheels", default_wheels)
+    st.session_state.setdefault("phys_fan_diameter_basic", default_fan)
+    st.session_state.setdefault("phys_fan_blades_basic", default_blades)
+    st.session_state.setdefault("phys_nose_wheel_d", 0.75)
+    st.session_state.setdefault("phys_nose_strut_d", 0.09)
+    st.session_state.setdefault("phys_main_wheel_d", 1.1)
+    st.session_state.setdefault("phys_main_strut_d", 0.16)
+    st.session_state.setdefault("phys_gear_down", (op_mode_init == "A"))
+    st.session_state.setdefault("phys_temperature", 15.0)
+    st.session_state.setdefault("phys_humidity", 70.0)
+    st.session_state.setdefault("phys_pressure", 101.325)
+    st.session_state.setdefault("phys_use_engine_detail", False)
+    st.session_state.setdefault("phys_mass_flow", 450.0)
+    st.session_state.setdefault("phys_nozzle_area", 1.5)
+    st.session_state.setdefault("phys_nozzle_velocity", 300.0)
+    st.session_state.setdefault("phys_nozzle_temperature", 450.0)
+    st.session_state.setdefault("phys_nozzle_pressure", 160.0)
+    st.session_state.setdefault("phys_fan_diameter", default_fan)
+    st.session_state.setdefault("phys_rpm", 3500.0)
+    st.session_state.setdefault("phys_n1", 90.0)
+    st.session_state.setdefault("phys_blades", default_blades)
+    st.session_state.setdefault("phys_stators", 40)
+    st.session_state.setdefault("phys_rotor_stator_spacing", 0.12)
+    st.session_state.setdefault("phys_fan_temp_rise", 65.0)
+    st.session_state.setdefault("phys_core_mass_flow", 55.0)
+    st.session_state.setdefault("phys_combustor_inlet", 700.0)
+    st.session_state.setdefault("phys_combustor_exit", 1350.0)
+    st.session_state.setdefault("phys_turbine_attenuation", 18.0)
+
     c1, c2 = st.columns(2)
     with c1:
         op_mode = st.radio(
@@ -1514,39 +1582,31 @@ def page_physics(*, embedded=False, compare_learned=True):
             format_func=lambda x: "Departure" if x == "D" else "Approach")
     table_key = ("SEL", op_mode)
     table = None if preset else pred.tables.get(table_key)
-    default_thrust = float(
-        (table.P[-1] if op_mode == "D" else table.P[0])
-        if table is not None else
-        ac.max_static_thrust_lb * (0.85 if op_mode == "D" else 0.2))
     with c2:
         bpr = float(st.number_input(
             "Bypass ratio", min_value=0.0, max_value=25.0,
-            value=default_bpr, step=0.1, key="phys_bpr"))
+            step=0.1, key="phys_bpr"))
     c3, c4 = st.columns(2)
     with c3:
         if _is_metric():
             thrust_lbf = kn_to_lbf(float(st.number_input(
                 "Event thrust [kN/engine]", min_value=0.1,
                 max_value=max(600.0, lbf_to_kn(ac.max_static_thrust_lb * 1.25)),
-                value=lbf_to_kn(default_thrust), step=1.0,
-                key="phys_thrust_metric")))
+                step=1.0, key="phys_thrust_metric")))
         else:
             thrust_lbf = float(st.number_input(
                 "Event thrust [lb/engine]", min_value=1.0,
                 max_value=max(130000.0, ac.max_static_thrust_lb * 1.25),
-                value=default_thrust, step=100.0,
-                key="phys_thrust_imperial"))
+                step=100.0, key="phys_thrust_imperial"))
     with c4:
         if _is_metric():
             distance_ft = m_to_ft(float(st.number_input(
                 "Closest distance [m]", min_value=30.0, max_value=100000.0,
-                value=ft_to_m(1000.0), step=50.0,
-                key="phys_distance_metric")))
+                step=50.0, key="phys_distance_metric")))
         else:
             distance_ft = float(st.number_input(
                 "Closest distance [ft]", min_value=100.0, max_value=300000.0,
-                value=1000.0, step=100.0,
-                key="phys_distance_imperial"))
+                step=100.0, key="phys_distance_imperial"))
 
     values = {
         "n_engines": int(ac.n_engines),
@@ -1577,76 +1637,70 @@ def page_physics(*, embedded=False, compare_learned=True):
         with a1:
             values["wing_area_m2"] = float(st.number_input(
                 "Wing area [m²]", min_value=1.0, max_value=1500.0,
-                value=default_area, step=1.0, key="phys_wing_area"))
+                step=1.0, key="phys_wing_area"))
             values["wing_span_m"] = float(st.number_input(
                 "Wing span [m]", min_value=1.0, max_value=120.0,
-                value=default_span, step=0.5, key="phys_wing_span"))
+                step=0.5, key="phys_wing_span"))
             values["flap_area_m2"] = float(st.number_input(
                 "Flap area [m²]", min_value=0.1, max_value=500.0,
-                value=0.17 * default_area, step=0.5,
-                key="phys_flap_area"))
+                step=0.5, key="phys_flap_area"))
             values["flap_chord_m"] = float(st.number_input(
                 "Flap chord [m]", min_value=0.1, max_value=15.0,
-                value=2.0, step=0.1, key="phys_flap_chord"))
+                step=0.1, key="phys_flap_chord"))
             values["flap_deflection_deg"] = float(st.number_input(
                 "Flap deflection [deg]", min_value=0.0, max_value=60.0,
-                value=10.0 if op_mode == "D" else 30.0, step=1.0,
-                key="phys_flap_deg"))
+                step=1.0, key="phys_flap_deg"))
         with a2:
             values["slat_area_m2"] = float(st.number_input(
                 "Slat area [m²]", min_value=0.1, max_value=300.0,
-                value=0.08 * default_area, step=0.5,
-                key="phys_slat_area"))
+                step=0.5, key="phys_slat_area"))
             values["slat_chord_m"] = float(st.number_input(
                 "Slat chord [m]", min_value=0.05, max_value=8.0,
-                value=0.7, step=0.05, key="phys_slat_chord"))
+                step=0.05, key="phys_slat_chord"))
             values["slat_deflection_deg"] = float(st.number_input(
                 "Slat deflection [deg]", min_value=0.0, max_value=60.0,
-                value=20.0, step=1.0, key="phys_slat_deg"))
+                step=1.0, key="phys_slat_deg"))
             values["nose_wheel_count"] = int(st.number_input(
-                "Nose wheels", min_value=1, max_value=8, value=2,
+                "Nose wheels", min_value=1, max_value=8,
                 step=1, key="phys_nose_wheels"))
             values["main_wheel_count"] = int(st.number_input(
                 "Main wheels", min_value=1, max_value=32,
-                value=default_wheels, step=1, key="phys_main_wheels"))
+                step=1, key="phys_main_wheels"))
             values["fan_diameter_m"] = float(st.number_input(
                 "Fan diameter [m]", min_value=0.1, max_value=8.0,
-                value=default_fan, step=0.05,
-                key="phys_fan_diameter_basic"))
+                step=0.05, key="phys_fan_diameter_basic"))
             values["blade_count"] = int(st.number_input(
                 "Fan blades", min_value=2, max_value=100,
-                value=default_blades, step=1,
-                key="phys_fan_blades_basic"))
+                step=1, key="phys_fan_blades_basic"))
         with a3:
             values["nose_wheel_diameter_m"] = float(st.number_input(
                 "Nose-wheel diameter [m]", min_value=0.1, max_value=3.0,
-                value=0.75, step=0.05, key="phys_nose_wheel_d"))
+                step=0.05, key="phys_nose_wheel_d"))
             values["nose_strut_diameter_m"] = float(st.number_input(
                 "Nose-strut diameter [m]", min_value=0.01, max_value=1.0,
-                value=0.09, step=0.01, key="phys_nose_strut_d"))
+                step=0.01, key="phys_nose_strut_d"))
             values["main_wheel_diameter_m"] = float(st.number_input(
                 "Main-wheel diameter [m]", min_value=0.1, max_value=3.0,
-                value=1.1, step=0.05, key="phys_main_wheel_d"))
+                step=0.05, key="phys_main_wheel_d"))
             values["main_strut_diameter_m"] = float(st.number_input(
                 "Main-strut diameter [m]", min_value=0.01, max_value=1.0,
-                value=0.16, step=0.01, key="phys_main_strut_d"))
+                step=0.01, key="phys_main_strut_d"))
             values["gear_down"] = st.checkbox(
-                "Landing gear down", value=(op_mode == "A"),
-                key="phys_gear_down")
+                "Landing gear down", key="phys_gear_down")
 
         e1, e2, e3 = st.columns(3)
         with e1:
             values["temperature_c"] = float(st.number_input(
                 "Temperature [°C]", min_value=-60.0, max_value=60.0,
-                value=15.0, step=1.0, key="phys_temperature"))
+                step=1.0, key="phys_temperature"))
         with e2:
             values["relative_humidity_percent"] = float(st.number_input(
                 "Relative humidity [%]", min_value=1.0, max_value=100.0,
-                value=70.0, step=1.0, key="phys_humidity"))
+                step=1.0, key="phys_humidity"))
         with e3:
             values["pressure_kpa"] = float(st.number_input(
                 "Pressure [kPa]", min_value=50.0, max_value=120.0,
-                value=101.325, step=0.1, key="phys_pressure"))
+                step=0.1, key="phys_pressure"))
 
     with st.expander("Detailed engine-deck inputs (optional)"):
         values["use_engine_detail"] = st.checkbox(
@@ -1667,54 +1721,54 @@ def page_physics(*, embedded=False, compare_learned=True):
             g1, g2, g3 = st.columns(3)
             with g1:
                 values["mass_flow_kg_s"] = float(st.number_input(
-                    "Engine mass flow [kg/s]", 1.0, 2500.0, 450.0, 5.0,
+                    "Engine mass flow [kg/s]", min_value=1.0, max_value=2500.0, step=5.0,
                     key="phys_mass_flow"))
                 values["nozzle_exit_area_m2"] = float(st.number_input(
-                    "Nozzle exit area [m²]", 0.01, 20.0, 1.5, 0.05,
+                    "Nozzle exit area [m²]", min_value=0.01, max_value=20.0, step=0.05,
                     key="phys_nozzle_area"))
                 values["nozzle_exit_velocity_ms"] = float(st.number_input(
-                    "Nozzle exit velocity [m/s]", 10.0, 1500.0, 300.0, 5.0,
+                    "Nozzle exit velocity [m/s]", min_value=10.0, max_value=1500.0, step=5.0,
                     key="phys_nozzle_velocity"))
                 values["nozzle_exit_temperature_k"] = float(st.number_input(
-                    "Nozzle exit temperature [K]", 150.0, 2500.0, 450.0, 10.0,
+                    "Nozzle exit temperature [K]", min_value=150.0, max_value=2500.0, step=10.0,
                     key="phys_nozzle_temperature"))
                 values["nozzle_exit_pressure_kpa"] = float(st.number_input(
-                    "Nozzle total pressure [kPa]", 10.0, 3000.0, 160.0, 5.0,
+                    "Nozzle total pressure [kPa]", min_value=10.0, max_value=3000.0, step=5.0,
                     key="phys_nozzle_pressure"))
             with g2:
                 values["fan_diameter_m"] = float(st.number_input(
-                    "Fan diameter [m]", 0.1, 8.0, default_fan, 0.05,
+                    "Fan diameter [m]", min_value=0.1, max_value=8.0, step=0.05,
                     key="phys_fan_diameter"))
                 values["rpm"] = float(st.number_input(
-                    "Fan speed [rpm]", 100.0, 30000.0, 3500.0, 100.0,
+                    "Fan speed [rpm]", min_value=100.0, max_value=30000.0, step=100.0,
                     key="phys_rpm"))
                 values["n1_percent"] = float(st.number_input(
-                    "N1 [%]", 1.0, 120.0, 90.0, 1.0, key="phys_n1"))
+                    "N1 [%]", min_value=1.0, max_value=120.0, step=1.0, key="phys_n1"))
                 values["blade_count"] = int(st.number_input(
-                    "Fan blades", 2, 100, default_blades, 1,
+                    "Fan blades", min_value=2, max_value=100, step=1,
                     key="phys_blades"))
                 values["stator_count"] = int(st.number_input(
-                    "Stator vanes", 2, 200, 40, 1, key="phys_stators"))
+                    "Stator vanes", min_value=2, max_value=200, step=1, key="phys_stators"))
                 values["rotor_stator_spacing_m"] = float(st.number_input(
-                    "Rotor–stator spacing [m]", 0.001, 2.0, 0.12, 0.01,
+                    "Rotor–stator spacing [m]", min_value=0.001, max_value=2.0, step=0.01,
                     key="phys_rotor_stator_spacing"))
                 values["fan_temperature_rise_k"] = float(st.number_input(
-                    "Fan temperature rise [K]", 1.0, 500.0, 65.0, 5.0,
+                    "Fan temperature rise [K]", min_value=1.0, max_value=500.0, step=5.0,
                     key="phys_fan_temp_rise"))
             with g3:
                 values["core_mass_flow_kg_s"] = float(st.number_input(
-                    "Core mass flow [kg/s]", 0.1, 1000.0, 55.0, 1.0,
+                    "Core mass flow [kg/s]", min_value=0.1, max_value=1000.0, step=1.0,
                     key="phys_core_mass_flow"))
                 values["combustor_inlet_temperature_k"] = float(
                     st.number_input(
-                        "Combustor inlet temperature [K]", 150.0, 2500.0,
-                        700.0, 10.0, key="phys_combustor_inlet"))
+                        "Combustor inlet temperature [K]", min_value=150.0, max_value=2500.0,
+                        step=10.0, key="phys_combustor_inlet"))
                 values["combustor_exit_temperature_k"] = float(
                     st.number_input(
-                        "Combustor exit temperature [K]", 200.0, 3500.0,
-                        1350.0, 10.0, key="phys_combustor_exit"))
+                        "Combustor exit temperature [K]", min_value=200.0, max_value=3500.0,
+                        step=10.0, key="phys_combustor_exit"))
                 values["turbine_attenuation_db"] = float(st.number_input(
-                    "Turbine attenuation [dB]", 0.0, 80.0, 18.0, 1.0,
+                    "Turbine attenuation [dB]", min_value=0.0, max_value=80.0, step=1.0,
                     key="phys_turbine_attenuation"))
 
     physics_clicked = st.button(
@@ -2240,12 +2294,343 @@ def page_fleet():
                 "or inspect the learned-model validation evidence above.")
 
 
+def page_validation():
+    version = data_version()
+    st.header("Model validation & accuracy")
+    _methodology_panel(
+        "Inspect the training vs. validation split and per-aircraft accuracy metrics.",
+        "Toggle between the Frozen v6.3 Release Holdout and 5-Fold Group Cross-Validation, filter by training role, or inspect point-by-point NPD error residuals.",
+        "Auditable release-holdout split, family leakage purge guards, and balanced stratified cross-validation.",
+    )
+
+    p_col1, p_col2 = st.columns([3, 1])
+    with p_col1:
+        protocol_choice = st.radio(
+            "Validation protocol",
+            [
+                "EASA Verified 5-Fold Cross-Validation (11 Verified Aircraft)",
+                "Full Jet Fleet 5-Fold Cross-Validation (94 Aircraft)",
+                "Frozen v6.3 Release-Holdout (v2.3 Train vs v6.3 Test)",
+            ],
+            horizontal=True,
+            key="val_protocol_choice",
+        )
+    force_recalc = False
+    with p_col2:
+        recalc = st.button(
+            "🔄 Refresh / Recompute",
+            key="btn_val_recalc",
+            help="Clear cached validation dataset and recalculate from scratch",
+        )
+        if recalc:
+            st.cache_data.clear()
+            force_recalc = True
+
+    if "EASA Verified" in protocol_choice:
+        proto_key = "verified_5fold"
+    elif "Release-Holdout" in protocol_choice:
+        proto_key = "holdout"
+    else:
+        proto_key = "group_cv"
+
+    with st.spinner("Loading accuracy validation dataset..."):
+        ds = get_accuracy_dataset(version, proto_key, force_recompute=force_recalc)
+
+    kpis = ds["kpis"]
+    summary_df = ds["summary_table"]
+    pred_df = ds["predictions"]
+
+    # Top KPI cards
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Total Aircraft", kpis["total_aircraft_count"])
+    m2.metric("Training Support", kpis["training_aircraft_count"])
+    m3.metric("Validation Targets", kpis["validation_aircraft_count"])
+    if proto_key == "holdout":
+        m4.metric("Purged (Leakage Guards)", kpis["purged_aircraft_count"])
+        m5.metric("Holdout Val RMSE", f"{kpis['overall_validation_rmse_dB']:.3f} dB")
+    elif proto_key == "verified_5fold":
+        m4.metric("Folds", kpis.get("n_folds", 5))
+        m5.metric("Verified OOF RMSE", f"{kpis['overall_validation_rmse_dB']:.3f} dB")
+    else:
+        m4.metric("Folds", kpis.get("n_folds", 5))
+        m5.metric("Fleet OOF RMSE", f"{kpis['overall_validation_rmse_dB']:.3f} dB")
+
+    if proto_key == "verified_5fold":
+        st.caption("🔒 Verified Ground Truth: Strictly evaluated against the 11 certified aircraft in `easa_verified_anp_aircraft_types.csv` with zero sister-variant training leakage.")
+
+    st.divider()
+    st.subheader("Accuracy validation table")
+
+    # Filters
+    c_f1, c_f2, c_f3 = st.columns([1, 1, 2])
+    with c_f1:
+        all_roles = ["All Roles"] + sorted(summary_df["Role"].unique().tolist())
+        selected_role = st.selectbox("Filter by Role", all_roles, key="val_filter_role")
+    with c_f2:
+        sort_col = st.selectbox(
+            "Sort by",
+            ["Overall RMSE [dB]", "MAE [dB]", "Max Error [dB]", "NPD_ID", "Description"],
+            key="val_sort_col",
+        )
+    with c_f3:
+        search_query = st.text_input("Search Aircraft / Description", key="val_search_query")
+
+    filt_df = summary_df.copy()
+    if selected_role != "All Roles":
+        filt_df = filt_df[filt_df["Role"] == selected_role]
+    if search_query:
+        pat = search_query.lower()
+        filt_df = filt_df[
+            filt_df["NPD_ID"].str.lower().str.contains(pat, na=False)
+            | filt_df["Description"].str.lower().str.contains(pat, na=False)
+            | filt_df["ACFT_ID"].str.lower().str.contains(pat, na=False)
+        ]
+    if sort_col in filt_df.columns:
+        filt_df = filt_df.sort_values(
+            sort_col,
+            ascending=(sort_col in ["NPD_ID", "Description"]),
+            kind="mergesort",
+        )
+
+    # Add Role display formatting with emojis/badges
+    display_df = filt_df.copy()
+
+    def _badge_role(val):
+        if val == "VALIDATION_ONLY":
+            return "🔵 Validation Only"
+        elif val == "TRAIN":
+            return "🟢 Training Set"
+        elif val == "PURGED":
+            return "🟡 Purged (Leakage Guard)"
+        elif val in ("OUT_OF_FOLD_VALIDATION", "VERIFIED_OUT_OF_FOLD"):
+            return "🔵 Out-of-Fold Test"
+        return str(val)
+
+    display_df["Role Badge"] = display_df["Role"].apply(_badge_role)
+
+    # Reorder columns for optimal readability
+    core_cols = [
+        "NPD_ID",
+        "Description",
+        "EASA Status",
+        "Verification Date",
+        "Engine Family",
+        "Role Badge",
+        "Role Description",
+        "Engine Count",
+        "MTOW [lb]",
+        "Overall RMSE [dB]",
+        "MAE [dB]",
+        "Max Error [dB]",
+        "Bias [dB]",
+        "RMSE_SEL_D",
+        "RMSE_SEL_A",
+        "RMSE_LAmax_D",
+        "RMSE_LAmax_A",
+        "RMSE_EPNL_D",
+        "RMSE_EPNL_A",
+        "RMSE_PNLTM_D",
+        "RMSE_PNLTM_A",
+    ]
+    avail_cols = [c for c in core_cols if c in display_df.columns]
+
+    st.dataframe(display_df[avail_cols], width="stretch", hide_index=True)
+    st.caption(f"Showing {len(display_df)} of {len(summary_df)} aircraft records.")
+
+    csv_data = display_df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="📥 Download Accuracy Validation Table (CSV)",
+        data=csv_data,
+        file_name=f"pnmf_accuracy_validation_{proto_key}.csv",
+        mime="text/csv",
+        key="btn_download_val_csv",
+    )
+
+    st.divider()
+    st.subheader("Validation analytics & curve inspector")
+
+    g1, g2 = st.columns([1, 1])
+
+    with g1:
+        st.markdown("#### Error distribution by role")
+        valid_errs = summary_df.dropna(subset=["Overall RMSE [dB]"])
+        if not valid_errs.empty and len(valid_errs["Role"].unique()) > 1:
+            fig, ax = plt.subplots(figsize=(6, 4))
+            roles_present = sorted(valid_errs["Role"].unique())
+            data_to_plot = [
+                valid_errs[valid_errs["Role"] == r]["Overall RMSE [dB]"].dropna().values
+                for r in roles_present
+            ]
+            box = ax.boxplot(
+                data_to_plot,
+                patch_artist=True,
+            )
+            def _clean_role_label(r_code):
+                mapping = {
+                    "VALIDATION_ONLY": "Validation Only",
+                    "TRAIN": "Training Set",
+                    "PURGED": "Purged",
+                    "OUT_OF_FOLD_VALIDATION": "Out-of-Fold Test",
+                }
+                return mapping.get(r_code, str(r_code))
+
+            ax.set_xticks(range(1, len(roles_present) + 1))
+            ax.set_xticklabels([_clean_role_label(r) for r in roles_present])
+            colors = {
+                "VALIDATION_ONLY": "#3182ce",
+                "TRAIN": "#38a169",
+                "PURGED": "#d69e2e",
+                "OUT_OF_FOLD_VALIDATION": "#3182ce",
+            }
+            for patch, role_name in zip(box["boxes"], roles_present):
+                patch.set_facecolor(colors.get(role_name, "#718096"))
+                patch.set_alpha(0.6)
+
+            ax.set_ylabel("Overall RMSE [dB]")
+            ax.set_title(
+                "RMSE Distribution Across Aircraft Roles",
+                fontsize=11,
+                fontweight="bold",
+            )
+            ax.grid(True, linestyle="--", alpha=0.3)
+            fig.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
+        elif not valid_errs.empty:
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.hist(
+                valid_errs["Overall RMSE [dB]"].dropna(),
+                bins=15,
+                color="#3182ce",
+                edgecolor="black",
+                alpha=0.7,
+            )
+            ax.set_xlabel("Overall RMSE [dB]")
+            ax.set_ylabel("Aircraft Count")
+            ax.set_title(
+                "Distribution of Overall RMSE [dB]",
+                fontsize=11,
+                fontweight="bold",
+            )
+            ax.grid(True, linestyle="--", alpha=0.3)
+            fig.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
+
+    with g2:
+        st.markdown("#### Aircraft NPD curve inspector")
+        eval_npds = [
+            n
+            for n in summary_df["NPD_ID"].tolist()
+            if not np.isnan(
+                summary_df.loc[summary_df["NPD_ID"] == n, "Overall RMSE [dB]"].iloc[0]
+            )
+        ]
+        if eval_npds:
+            selected_npd = st.selectbox(
+                "Select Aircraft", eval_npds, key="val_insp_npd"
+            )
+            c_m1, c_m2 = st.columns(2)
+            with c_m1:
+                insp_metric = st.selectbox(
+                    "Metric", ["SEL", "LAmax", "EPNL", "PNLTM"], key="val_insp_metric"
+                )
+            with c_m2:
+                insp_mode = st.radio(
+                    "Op Mode", ["D", "A"], horizontal=True, key="val_insp_mode"
+                )
+
+            acft_curve_preds = pred_df[
+                (pred_df["npd_id"] == selected_npd)
+                & (pred_df["metric"] == insp_metric)
+                & (pred_df["op_mode"] == insp_mode)
+            ]
+
+            if not acft_curve_preds.empty:
+                fig, (ax_curve, ax_res) = plt.subplots(
+                    2,
+                    1,
+                    figsize=(6.5, 5.2),
+                    gridspec_kw={"height_ratios": [2.5, 1]},
+                    sharex=True,
+                )
+                dist_vals = acft_curve_preds["distance_ft"].unique()
+                powers = sorted(acft_curve_preds["power_setting"].unique())
+                cmap = plt.cm.viridis(np.linspace(0, 0.85, len(powers)))
+
+                dist_x = ft_to_m(dist_vals) if _is_metric() else dist_vals
+
+                for idx, p in enumerate(powers):
+                    sub_p = acft_curve_preds[
+                        acft_curve_preds["power_setting"] == p
+                    ].sort_values("distance_ft")
+                    sub_dist = (
+                        ft_to_m(sub_p["distance_ft"].values)
+                        if _is_metric()
+                        else sub_p["distance_ft"].values
+                    )
+
+                    # Plot truth as solid with circles
+                    ax_curve.semilogx(
+                        sub_dist,
+                        sub_p["truth_dB"].values,
+                        "o-",
+                        color=cmap[idx],
+                        lw=1.5,
+                        label=f"Truth {p:.0f}",
+                    )
+                    # Plot pred as dashed with x
+                    ax_curve.semilogx(
+                        sub_dist,
+                        sub_p["prediction_dB"].values,
+                        "x--",
+                        color=cmap[idx],
+                        lw=1.2,
+                        alpha=0.85,
+                        label=f"Pred {p:.0f}",
+                    )
+                    # Residual
+                    ax_res.semilogx(
+                        sub_dist,
+                        sub_p["error_dB"].values,
+                        "o-",
+                        color=cmap[idx],
+                        lw=1.2,
+                        alpha=0.8,
+                    )
+
+                ax_curve.set_ylabel(f"{insp_metric} [dB]")
+                ax_curve.set_title(
+                    f"{selected_npd} — {insp_metric}/{insp_mode} Truth vs Predicted",
+                    fontsize=10,
+                    fontweight="bold",
+                )
+                ax_curve.grid(True, which="both", alpha=0.25)
+                ax_curve.legend(fontsize=6.5, ncol=2)
+
+                ax_res.axhline(0, color="black", linestyle="--", lw=0.8)
+                ax_res.set_xlabel(_dist_label())
+                ax_res.set_ylabel("Error [dB]")
+                ax_res.grid(True, which="both", alpha=0.25)
+
+                fig.tight_layout()
+                st.pyplot(fig)
+                plt.close(fig)
+            else:
+                st.info(
+                    f"No evaluated curves for {selected_npd} at {insp_metric}/{insp_mode}."
+                )
+        else:
+            st.info("No evaluated aircraft curves found.")
+
+
 PAGES = {
     "Aircraft Designer": page_designer,
     "Prediction results": page_results,
     "Comparison": page_comparison,
     "Operations": page_operations,
     "Fleet explorer": page_fleet,
+    "Model Validation": page_validation,
 }
 
 
@@ -2293,7 +2678,10 @@ def _sidebar_how_to_use():
             "observer.\n"
             "5. **Fleet explorer** — browse the underlying real ANP "
             "fleet and any validation artifacts, at any time, no "
-            "prediction needed.\n\n"
+            "prediction needed.\n"
+            "6. **Model Validation** — inspect complete per-aircraft accuracy "
+            "tables, training vs. validation-only roles, and point-by-point "
+            "NPD residual curves.\n\n"
             "Steps 2–4 need an analysis from step 1 first — each page "
             "prompts you back to **Aircraft Designer** until one exists.")
 

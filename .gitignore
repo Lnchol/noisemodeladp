@@ -31,10 +31,14 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
-# --- Coverage / caches ---
+# --- Coverage / caches / temp ---
 coverage/
 .cache/
 .tmp/
+tmp/
+*.zip
+.codegraph
+.debug-journal.md
 
 # --- PNMF local data and regenerated artifacts ---
 projects/pnmf/*.sqlite
@@ -48,12 +52,6 @@ projects/pnmf/.streamlit/secrets.toml
 projects/pnmf/docs/**
 *.joblib
 *.pkl
-tmp/SERDP09_MDOEchevron/
-
-# --- Legacy PNMF workspace: local data, environments, and bundles ---
-projects/pnmf-framework/.venv/
-projects/pnmf-framework.zip
-
 
 # --- Codex/OMO local orchestration state ---
 .omo/

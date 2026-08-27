@@ -1,18 +1,27 @@
+﻿# Codex project bootstrap — Efe
+# Primary session: GPT-5.6 Sol xhigh orchestrator
+# Dynamically spawned subagents: GPT-5.6 Luna max
+
 model = "gpt-5.6-sol"
-model_context_window = 372000
-model_reasoning_effort = "high"
+model_reasoning_effort = "xhigh"
 plan_mode_reasoning_effort = "xhigh"
+
 [agents]
-max_threads = 1000
 enabled = true
 max_concurrent_threads_per_session = 3
-default_subagent_model = "gpt-5.6-sol"
-default_subagent_reasoning_effort = "medium"
-interrupt_message = false
+default_subagent_model = "gpt-5.6-luna"
+default_subagent_reasoning_effort = "max"
+max_depth = 2
 
-# Managed by LazyCodex: multi_agent_v2 is re-disabled on every Codex session start
-# because enabling it fails every turn with HTTP 400 (openai/codex#26753).
-# Opt out: LAZYCODEX_CONFIG_MIGRATION_DISABLED=1 (or OMO_CODEX_CONFIG_MIGRATION_DISABLED=1).
+[features]
+multi_agent = true
+hooks = true
+
+[windows]
+sandbox = "unelevated"
+
+# Managed by LazyCodex:
+# multi_agent_v2 is intentionally disabled because enabling it currently
+# causes HTTP 400 errors in your setup.
 [features.multi_agent_v2]
-enabled = false
 max_concurrent_threads_per_session = 16

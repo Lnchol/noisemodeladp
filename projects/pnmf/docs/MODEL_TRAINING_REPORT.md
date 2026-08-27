@@ -128,11 +128,11 @@ Every evaluated fold/test slice is classified on exact engine-type/count trainin
 ## Reproducibility record
 
 - Seed: `20260724`; folds: `3`.
-- Git commit: `3c4846c97cdf244c964f44d8d1e1e0c1aa6714ae`; dirty: `True`.
+- Git commit: `595a25979ed3104ff17f698fbd73488addf6cd8b`; dirty: `True`.
 - Datastore SHA-256: `9b3ea2f58347ebb348128c49b3238e6a0b28852858fa7e87c89fad51d5e9fe8e`.
 - Source-manifest SHA-256: `316d3362f1b064a54f6be1f026a11c3fe297a0172e4ad95fc44ba4e7e8e0683f`.
 - Python `3.14.2`, numpy `2.5.1`, pandas `3.0.5`, scikit-learn `1.9.0`.
-- Run duration: `30.010` s.
+- Run duration: `39.242` s.
 
 Fixed seeds make the multi-threaded scikit-learn fits numerically reproducible to the observed approximately `1e-13` level, not guaranteed byte-identical. Samples, split definitions, source manifest, and support matrix are byte-stable for an unchanged datastore/configuration. Prediction and summary files can differ in last-bit formatting, and timestamps, durations, Git state and the run manifest necessarily vary.
 

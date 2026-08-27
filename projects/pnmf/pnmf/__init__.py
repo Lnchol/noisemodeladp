@@ -40,6 +40,10 @@ from .physics import (
     PhysicsNPDModel,
 )
 from .api import NoisePredictor, NoisePrediction
+from .accuracy_validation import (
+    build_accuracy_validation_dataset,
+    load_or_build_accuracy_dataset,
+)
 
 __all__ = [
     "ANPDatabase",
@@ -63,5 +67,7 @@ __all__ = [
     "EventDiagnostics",
     "NoisePredictor",
     "NoisePrediction",
+    "build_accuracy_validation_dataset",
+    "load_or_build_accuracy_dataset",
 ]
 __version__ = "0.3.0"

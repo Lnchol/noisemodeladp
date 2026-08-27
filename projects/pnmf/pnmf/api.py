@@ -32,6 +32,10 @@ from .core import (
 from .models import SurrogateNPDModel
 from .physics_calibration import load_calibrated_model
 from .physics import PhysicsNPDModel, PhysicsDesign
+from .accuracy_validation import (
+    build_accuracy_validation_dataset,
+    load_or_build_accuracy_dataset,
+)
 
 DEFAULT_MODEL = "et"
 _PHYSICS_METRICS = ("SEL", "LAmax")   # physics route scope (no EPNL/PNLTM)
